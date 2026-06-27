@@ -1,29 +1,17 @@
 <script setup lang="ts">
-import { NText } from 'naive-ui'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   size?: 'small' | 'medium' | 'large'
 }>()
 
-const sizeMap = {
-  small: '1rem',
-  medium: '1.25rem',
-  large: '1.5rem',
-} as const
+const textClass = computed(() =>
+  props.size === 'small' ? 'text-base' : props.size === 'large' ? 'text-2xl' : 'text-xl',
+)
 </script>
 
 <template>
-  <RouterLink to="/" class="app-logo">
-    <n-text
-      :style="{ fontSize: sizeMap[size ?? 'medium'], fontWeight: 700 }"
-    >
-      YT-DL UI
-    </n-text>
+  <RouterLink to="/" class="no-underline font-bold" :class="textClass">
+    YT-DL UI
   </RouterLink>
 </template>
-
-<style scoped>
-.app-logo {
-  text-decoration: none;
-}
-</style>
