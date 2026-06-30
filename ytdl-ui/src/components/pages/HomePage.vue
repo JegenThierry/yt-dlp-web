@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import UButton from '@nuxt/ui/components/Button.vue'
+import InputText from '@/components/atoms/inputs/InputText.vue'
+import { ref } from 'vue'
+
+const link = ref<string>();
 </script>
 
 <template>
@@ -6,11 +11,7 @@
     <h3 class="text-lg font-semibold mb-4">Download</h3>
     <form>
       <div class="flex flex-col gap-1 mb-4">
-        <label>Video URL</label>
-        <input
-          placeholder="https://..."
-          class="border border-default rounded px-3 py-1.5 bg-default"
-        />
+        <InputText class="w-full" v-model="link" label="Video URL" placeholder="https://youtube.com/..."></InputText>
       </div>
       <UButton type="submit" color="primary">Start</UButton>
     </form>

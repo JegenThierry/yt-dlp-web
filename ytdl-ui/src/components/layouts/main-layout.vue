@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { NavigationMenuItem } from '@nuxt/ui'
+import UButton from '@nuxt/ui/components/Button.vue'
+import UNavigationMenu from '@nuxt/ui/components/NavigationMenu.vue'
+import USidebar from '@nuxt/ui/components/Sidebar.vue'
 import AppLogo from '@/components/atoms/AppLogo.vue'
 import ThemeToggleButton from '@/components/atoms/ThemeToggleButton.vue'
 

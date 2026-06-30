@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useColorMode } from '@vueuse/core'
+import UButton from '@nuxt/ui/components/Button.vue'
 
 const colorMode = useColorMode()
 
