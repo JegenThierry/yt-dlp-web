@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { NavigationMenuItem } from '@nuxt/ui'
-import UButton from '@nuxt/ui/components/Button.vue'
 import UNavigationMenu from '@nuxt/ui/components/NavigationMenu.vue'
 import USidebar from '@nuxt/ui/components/Sidebar.vue'
 import AppLogo from '@/components/atoms/AppLogo.vue'
-import ThemeToggleButton from '@/components/atoms/ThemeToggleButton.vue'
+import ThemeToggleButton from '@/components/molecules/buttons/ThemeToggleButton.vue'
+import IconButton from '@/components/molecules/buttons/IconButton.vue'
 
 const sidebarOpen = ref(true)
 
@@ -44,11 +44,11 @@ const navItems: NavigationMenuItem[] = [
       class="flex-1 flex flex-col overflow-hidden peer-data-[variant=inset]:m-4 peer-data-[variant=inset]:rounded-xl peer-data-[variant=inset]:shadow-sm peer-data-[variant=inset]:ring peer-data-[variant=inset]:ring-default bg-default"
     >
       <div class="h-(--ui-header-height) shrink-0 flex items-center px-4 border-b border-default">
-        <UButton
+        <IconButton
           icon="i-lucide-panel-left"
           color="neutral"
           variant="ghost"
-          aria-label="Toggle sidebar"
+          ariaLabel="Toggle sidebar"
           @click="sidebarOpen = !sidebarOpen"
         />
       </div>

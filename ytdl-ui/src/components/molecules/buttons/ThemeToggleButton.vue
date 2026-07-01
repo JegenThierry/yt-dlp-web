@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useColorMode } from '@vueuse/core'
-import UButton from '@nuxt/ui/components/Button.vue'
+import IconButton from '@/components/molecules/buttons/IconButton.vue'
 
 const colorMode = useColorMode()
 
@@ -10,11 +10,11 @@ function toggle() {
 </script>
 
 <template>
-  <UButton
+  <IconButton
     :icon="colorMode === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'"
     color="neutral"
     variant="ghost"
-    aria-label="Toggle theme"
+    ariaLabel="Toggle theme"
     @click="toggle"
   />
 </template>
