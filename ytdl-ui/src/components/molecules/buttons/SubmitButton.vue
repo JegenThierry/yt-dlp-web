@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import BaseButton from '@/components/atoms/buttons/BaseButton.vue'
+import type { ButtonType } from '@/types/buttonTypes.ts'
 
 interface SubmitButtonProps {
   disabled?: boolean
   loading?: boolean
+  type?: ButtonType
 }
 
-defineProps<SubmitButtonProps>()
+withDefaults(defineProps<SubmitButtonProps>(), {
+  type: 'submit',
+})
 </script>
 
 <template>
   <BaseButton
-    type="submit"
+    :type="type"
     label="Submit"
     color="primary"
     :disabled="disabled"

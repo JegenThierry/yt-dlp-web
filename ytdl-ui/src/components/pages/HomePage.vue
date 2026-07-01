@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import InputText from '@/components/atoms/inputs/InputText.vue'
-import { ref } from 'vue'
-import DownloadButton from '@/components/molecules/buttons/DownloadButton.vue'
+import FormWrapper from '@/components/layouts/FormWrapper.vue'
+import SubmitButton from '@/components/molecules/buttons/SubmitButton.vue'
 
-const link = ref<string>();
+interface DownloadForm {
+  url: string
+}
+
+async function handleDownload(values: DownloadForm) {
+  console.log('Downloading:', values.url)
+}
 </script>
 
 <template>
   <div class="max-w-180 mx-auto p-4 border border-default rounded">
     <h3 class="text-lg font-semibold mb-4">Download</h3>
-    <form>
-      <div class="flex flex-col gap-1 mb-4">
-        <InputText class="w-full" v-model="link" label="Video URL" placeholder="https://youtube.com/..."></InputText>
-      </div>
-      <DownloadButton :disabled="!link" />
-    </form>
+    <FormWrapper
+      :initial-values="{ url: '' }"
+      :on-submit="handleDownload"
+      v-slot="{ state, loading }"
+    >
+      <InputText v-model="state.url" label="Video URL" placeholder="https://youtube.com/..." required />
+      <SubmitButton :loading="loading" :disabled="!state.url" />
+    </FormWrapper>
   </div>
 </template>

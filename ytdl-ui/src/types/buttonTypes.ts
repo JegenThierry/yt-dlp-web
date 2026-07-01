@@ -21,3 +21,9 @@ export type ButtonVariant =
   | 'subtle'
   | 'ghost'
   | 'link'
+
+
+export type ButtonType =
+  | 'button'
+  | 'submit'
+  | 'reset'
