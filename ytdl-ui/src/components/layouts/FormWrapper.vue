@@ -3,6 +3,7 @@ import UForm from '@nuxt/ui/components/Form.vue'
 import type { FormError, FormErrorEvent } from '@nuxt/ui'
 import { useToast } from '@nuxt/ui/composables'
 import { reactive, useTemplateRef } from 'vue'
+import { ApiError } from '@/api/apiClient'
 
 const props = withDefaults(
   defineProps<{
@@ -27,11 +28,25 @@ async function submit(event: { data: T }) {
   try {
     await props.onSubmit(event.data)
   } catch (err) {
-    toast.add({
-      title: 'Error',
-      description: err instanceof Error ? err.message : 'Something went wrong',
-      color: 'error',
-    })
+    if (err instanceof ApiError) {
+      toast.add({
+        title: `Error ${err.status}`,
+        description: err.message,
+        color: 'error',
+      })
+    } else if (err instanceof Error) {
+      toast.add({
+        title: 'Error',
+        description: err.message,
+        color: 'error',
+      })
+    } else {
+      toast.add({
+        title: 'Error',
+        description: 'Something went wrong',
+        color: 'error',
+      })
+    }
   }
 }
 
