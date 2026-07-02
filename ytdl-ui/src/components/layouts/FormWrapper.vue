@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends Record<string, unknown>">
 import UForm from '@nuxt/ui/components/Form.vue'
-import type { FormError, FormErrorEvent } from '@nuxt/ui/runtime/types/form'
+import type { FormError, FormErrorEvent } from '@nuxt/ui'
 import { useToast } from '@nuxt/ui/composables'
 import { reactive, useTemplateRef } from 'vue'
 
