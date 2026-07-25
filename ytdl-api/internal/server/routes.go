@@ -4,8 +4,8 @@ import "ytdl-api/internal/handlers"
 
 func (Server *Server) registerRoutes() {
 	// Handlers
-	handlers.PlaylistHandler{}
+	playlistHandler := handlers.PlaylistHandler{DB: Server.db}
 
-	Server.rout
-
+	// Server.router...
+	Server.router.HandleFunc("POST /playlists", playlistHandler.CreatePlaylist)
 }

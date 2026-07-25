@@ -1,4 +1,4 @@
-package models
+package ytdlp
 
 type AudioCodecs string
 
