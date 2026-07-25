@@ -1,0 +1,10 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "yt-dlp-api/internal/repository/queries.sql"
+    schema: "yt-dlp-db/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "yt-dlp-api/internal/repository/db"
+        sql_package: "pgx/v5"

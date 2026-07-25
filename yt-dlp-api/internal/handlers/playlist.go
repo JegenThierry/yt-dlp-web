@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ytdl-api/internal/models"
+	"ytdl-api/pkg/ytdlp"
 )
 
 type PlaylistHandler struct {
@@ -49,4 +50,12 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 	}
 
 	log.Printf("Downloading playlist from URL: %s with target format: %s", req.URL, req.TargetFormat)
+
+	metadata, err := ytdlp.GetPlaylist(req.URL)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch playlist metadata")
+		return
+	}
+
+	log.Printf("Fetched playlist metadata: %+v", metadata)
 }

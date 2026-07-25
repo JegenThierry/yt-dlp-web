@@ -25,3 +25,9 @@ const (
 	DUMP_JSON        CommandArguments = "--dump-json"
 	DUMP_SINGLE_JSON CommandArguments = "--dump-single-json"
 )
+
+type CommandLineTools string
+
+const (
+	YT_DLP CommandLineTools = "yt-dlp"
+)

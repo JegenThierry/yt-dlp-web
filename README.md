@@ -21,7 +21,7 @@ We encourage you to use our Docker setup if you want to deploy the project to yo
 
 We recommend running the project using Docker. A `docker-compose.yaml` file can be found in the root of the repository. Configure the application to your preferences by creating a `.env` file in the root of the repository. A sample configuration can be found in `.env.example`. 
 
-Run the full-stack using:
+Run the full stack using:
 
 ```bash
 docker compose up -d
@@ -31,6 +31,22 @@ If you have your own Postgres DB already, you may want to remove the DB service.
 
 ```bash
 docker compose up -d yt-dlp-api yt-dlp-ui
+``` 
+
+### Database
+
+We are using `golang-migrate` to manage migrations.
+
+Creating a new migration:
+
+```bash
+migrate create -ext sql -dir yt-dlp-db/migrations -seq <migration_name>
+``` 
+
+Applying migrations to the database:
+
+```bash
+migrate -path yt-dlp-db/migrations -database "postgres://<user>:<pass>@<url>:<port>/<db>?sslmode=disable" up
 ``` 
 
 ## General Workflow
