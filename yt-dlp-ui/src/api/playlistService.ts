@@ -1,4 +1,4 @@
-import { CreatePlaylistRequest, Playlist } from "@/models/playlist";
+import type { CreatePlaylistRequest, Playlist } from "@/models/playlist";
 import { api } from "./apiClient";
 
 export async function createPlaylist(request: CreatePlaylistRequest): Promise<Playlist> {

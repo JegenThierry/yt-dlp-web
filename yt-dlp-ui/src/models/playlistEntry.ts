@@ -1,4 +1,4 @@
-import { DownloadStatus, AudioFormat } from "./enums";
+import type { DownloadStatus, AudioFormat } from "./enums";
 
 export interface PlaylistEntry {
 	id: number;

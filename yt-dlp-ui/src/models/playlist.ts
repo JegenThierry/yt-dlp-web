@@ -1,5 +1,5 @@
-import { AudioFormat } from "./enums";
-import { PlaylistEntry } from "./playlistEntry";
+import type { AudioFormat } from "./enums";
+import type { PlaylistEntry } from "./playlistEntry";
 
 export interface CreatePlaylistRequest {
   url: string;
