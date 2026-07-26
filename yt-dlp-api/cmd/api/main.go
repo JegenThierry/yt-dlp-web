@@ -21,19 +21,19 @@ func main() {
 func run() error {
 	err := godotenv.Load()
 	if err != nil {
-		slog.Error("Error loading .env file", err.Error())
+		slog.Error("Error loading .env file", "error", err)
 		return err
 	}
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		slog.Error("Error loading config", err.Error())
+		slog.Error("Error loading config", "error", err)
 		return err
 	}
 
 	db, err := repository.Connect(context.Background(), cfg)
 	if err != nil {
-		slog.Error("Error connecting to database", err.Error())
+		slog.Error("Error connecting to database", "error", err)
 		return err
 	}
 	defer db.Close()

@@ -1,23 +1,30 @@
 <script setup lang="ts">
+import { createPlaylist } from '@/api/playlistService'
 import InputText from '@/components/atoms/inputs/InputText.vue'
 import FormWrapper from '@/components/layouts/FormWrapper.vue'
 import DownloadButton from '@/components/molecules/buttons/DownloadButton.vue'
+import { AudioFormat } from '@/models/enums'
+import type { CreatePlaylistRequest } from '@/models/playlist'
+
 interface DownloadForm {
   url: string
+  format?: AudioFormat
 }
 
 async function handleDownload(values: DownloadForm) {
-  await new Promise<void>((resolve) => {
-    setTimeout(() => {
-      try {
-        console.log('Downloading:', values.url)
-      } catch (error) {
-        console.error('Error downloading:', error)
-      } finally {
-        resolve()
-      }
-    }, 5000)
-  })
+  try {
+    const response = await createPlaylist(buildCreatePlaylistRequest(values))
+    console.log('Playlist created successfully:', response)
+  } catch (error) {
+    console.error('Error creating playlist:', error)
+  }
+}
+
+function buildCreatePlaylistRequest(values: DownloadForm): CreatePlaylistRequest {
+  return {
+    url: values.url,
+    target_format: values.format || AudioFormat.MP3,
+  }
 }
 </script>
 
