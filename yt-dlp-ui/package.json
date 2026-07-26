@@ -15,7 +15,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
-    "@nuxt/ui": "^4.10.0",
+    "@nuxt/ui": "4.10.0",
     "@vueuse/core": "14.3.0",
     "pinia": "3.0.4",
     "tailwindcss": "4.3.3",
