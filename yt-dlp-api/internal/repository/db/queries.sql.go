@@ -12,40 +12,44 @@ import (
 )
 
 const createPlaylist = `-- name: CreatePlaylist :one
-INSERT INTO playlists (url, title, target_format)
-VALUES ($1, $2, $3)
-RETURNING id, url, title, target_format
+INSERT INTO playlists (url, title, created_at, updated_at) 
+VALUES ($1, $2, NOW(), NOW()) 
+RETURNING id, url, title, created_at, updated_at
 `
 
 type CreatePlaylistParams struct {
-	Url          string
-	Title        pgtype.Text
-	TargetFormat NullMediaFormat
+	Url   string
+	Title pgtype.Text
 }
 
 func (q *Queries) CreatePlaylist(ctx context.Context, arg CreatePlaylistParams) (Playlist, error) {
-	row := q.db.QueryRow(ctx, createPlaylist, arg.Url, arg.Title, arg.TargetFormat)
+	row := q.db.QueryRow(ctx, createPlaylist, arg.Url, arg.Title)
 	var i Playlist
 	err := row.Scan(
 		&i.ID,
 		&i.Url,
 		&i.Title,
-		&i.TargetFormat,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const createPlaylistEntry = `-- name: CreatePlaylistEntry :one
-INSERT INTO playlist_entries (playlist_id, video_id, title, status, format)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, file_path, status, format, created_at, updated_at
+INSERT INTO playlist_entries (playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at
 `
 
 type CreatePlaylistEntryParams struct {
 	PlaylistID int64
 	VideoID    string
 	Title      pgtype.Text
+	Artist     pgtype.Text
+	Duration   pgtype.Int4
+	Thumbnail  pgtype.Text
 	Status     NullEntryStatus
+	FilePath   pgtype.Text
 	Format     NullMediaFormat
 }
 
@@ -54,7 +58,11 @@ func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEnt
 		arg.PlaylistID,
 		arg.VideoID,
 		arg.Title,
+		arg.Artist,
+		arg.Duration,
+		arg.Thumbnail,
 		arg.Status,
+		arg.FilePath,
 		arg.Format,
 	)
 	var i PlaylistEntry
@@ -66,8 +74,8 @@ func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEnt
 		&i.Artist,
 		&i.Duration,
 		&i.Thumbnail,
-		&i.FilePath,
 		&i.Status,
+		&i.FilePath,
 		&i.Format,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -75,46 +83,23 @@ func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEnt
 	return i, err
 }
 
-const getPlaylist = `-- name: GetPlaylist :one
-SELECT id, url, title, target_format FROM playlists WHERE id = $1 LIMIT 1
+const fetchAllPlaylists = `-- name: FetchAllPlaylists :many
+SELECT id, url, title, created_at, updated_at FROM playlists ORDER BY created_at DESC
 `
 
-func (q *Queries) GetPlaylist(ctx context.Context, id int64) (Playlist, error) {
-	row := q.db.QueryRow(ctx, getPlaylist, id)
-	var i Playlist
-	err := row.Scan(
-		&i.ID,
-		&i.Url,
-		&i.Title,
-		&i.TargetFormat,
-	)
-	return i, err
-}
-
-const listPlaylistEntries = `-- name: ListPlaylistEntries :many
-SELECT id, playlist_id, video_id, title, artist, duration, thumbnail, file_path, status, format, created_at, updated_at FROM playlist_entries WHERE playlist_id = $1 ORDER BY created_at
-`
-
-func (q *Queries) ListPlaylistEntries(ctx context.Context, playlistID int64) ([]PlaylistEntry, error) {
-	rows, err := q.db.Query(ctx, listPlaylistEntries, playlistID)
+func (q *Queries) FetchAllPlaylists(ctx context.Context) ([]Playlist, error) {
+	rows, err := q.db.Query(ctx, fetchAllPlaylists)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []PlaylistEntry
+	var items []Playlist
 	for rows.Next() {
-		var i PlaylistEntry
+		var i Playlist
 		if err := rows.Scan(
 			&i.ID,
-			&i.PlaylistID,
-			&i.VideoID,
+			&i.Url,
 			&i.Title,
-			&i.Artist,
-			&i.Duration,
-			&i.Thumbnail,
-			&i.FilePath,
-			&i.Status,
-			&i.Format,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -128,31 +113,53 @@ func (q *Queries) ListPlaylistEntries(ctx context.Context, playlistID int64) ([]
 	return items, nil
 }
 
-const listPlaylists = `-- name: ListPlaylists :many
-SELECT id, url, title, target_format FROM playlists ORDER BY id
+const fetchPlaylistByID = `-- name: FetchPlaylistByID :one
+SELECT playlists.id, url, playlists.title, playlists.created_at, playlists.updated_at, playlist_entries.id, playlist_id, video_id, playlist_entries.title, artist, duration, thumbnail, status, file_path, format, playlist_entries.created_at, playlist_entries.updated_at FROM playlists 
+INNER JOIN playlist_entries ON playlists.id = playlist_entries.playlist_id 
+WHERE playlists.id = $1
 `
 
-func (q *Queries) ListPlaylists(ctx context.Context) ([]Playlist, error) {
-	rows, err := q.db.Query(ctx, listPlaylists)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Playlist
-	for rows.Next() {
-		var i Playlist
-		if err := rows.Scan(
-			&i.ID,
-			&i.Url,
-			&i.Title,
-			&i.TargetFormat,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type FetchPlaylistByIDRow struct {
+	ID          int64
+	Url         string
+	Title       pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ID_2        int64
+	PlaylistID  int64
+	VideoID     string
+	Title_2     pgtype.Text
+	Artist      pgtype.Text
+	Duration    pgtype.Int4
+	Thumbnail   pgtype.Text
+	Status      NullEntryStatus
+	FilePath    pgtype.Text
+	Format      NullMediaFormat
+	CreatedAt_2 pgtype.Timestamptz
+	UpdatedAt_2 pgtype.Timestamptz
+}
+
+func (q *Queries) FetchPlaylistByID(ctx context.Context, id int64) (FetchPlaylistByIDRow, error) {
+	row := q.db.QueryRow(ctx, fetchPlaylistByID, id)
+	var i FetchPlaylistByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Url,
+		&i.Title,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID_2,
+		&i.PlaylistID,
+		&i.VideoID,
+		&i.Title_2,
+		&i.Artist,
+		&i.Duration,
+		&i.Thumbnail,
+		&i.Status,
+		&i.FilePath,
+		&i.Format,
+		&i.CreatedAt_2,
+		&i.UpdatedAt_2,
+	)
+	return i, err
 }

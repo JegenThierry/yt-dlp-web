@@ -16,6 +16,7 @@ const (
 type DownloadStatus string
 
 const (
+	StatusNew         DownloadStatus = "new"
 	StatusPending     DownloadStatus = "pending"
 	StatusDownloading DownloadStatus = "downloading"
 	StatusCompleted   DownloadStatus = "completed"

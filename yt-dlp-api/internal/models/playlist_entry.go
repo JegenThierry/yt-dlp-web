@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type PlaylistEntry struct {
 	ID         int64          `json:"id"`
 	PlaylistID int64          `json:"playlist_id"`
@@ -11,4 +13,6 @@ type PlaylistEntry struct {
 	Status     DownloadStatus `json:"status"`
 	FilePath   string         `json:"file_path"`
 	Format     AudioFormat    `json:"format"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }

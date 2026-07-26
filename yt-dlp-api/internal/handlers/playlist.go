@@ -2,35 +2,26 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"ytdl-api/internal/models"
+	"ytdl-api/internal/repository/db"
 	"ytdl-api/pkg/ytdlp"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PlaylistHandler struct {
-	DB *pgxpool.Pool
+	Queries *db.Queries
 }
 
 func (h *PlaylistHandler) FetchPlaylists(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(r.Context(), "SELECT id, url, title, target_format FROM playlists ORDER BY id")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list playlists")
-		return
-	}
-	defer rows.Close()
+	playlists, err := h.Queries.FetchAllPlaylists(r.Context())
 
-	playlists := []models.Playlist{}
-	for rows.Next() {
-		var p models.Playlist
-		if err := rows.Scan(&p.ID, &p.URL, &p.Title, &p.TargetFormat); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to scan playlist")
-			return
-		}
-		playlists = append(playlists, p)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch playlists")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, playlists)
@@ -49,7 +40,7 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log.Printf("Downloading playlist from URL: %s with target format: %s", req.URL, req.TargetFormat)
+	slog.Info("Fetching playlist metadata for URL", "url", req.URL)
 
 	metadata, err := ytdlp.GetPlaylist(req.URL)
 	if err != nil {
@@ -57,5 +48,35 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log.Printf("Fetched playlist metadata: %+v", metadata)
+	playlist, err := h.Queries.CreatePlaylist(r.Context(), db.CreatePlaylistParams{
+		Title: pgtype.Text{String: metadata.Title, Valid: true},
+		Url:   req.URL,
+	})
+
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create playlist")
+		return
+	}
+
+	for _, entry := range metadata.Entries {
+		_, err := h.Queries.CreatePlaylistEntry(r.Context(), db.CreatePlaylistEntryParams{
+			PlaylistID: playlist.ID,
+			VideoID:    entry.ID,
+			Title:      pgtype.Text{String: entry.Title, Valid: true},
+			Artist:     pgtype.Text{String: entry.Uploader, Valid: entry.Uploader != ""},
+			Duration:   pgtype.Int4{Int32: int32(entry.Duration), Valid: true},
+			Thumbnail:  pgtype.Text{String: entry.Thumbnail, Valid: entry.Thumbnail != ""},
+			Status:     db.NullEntryStatus{EntryStatus: db.EntryStatusNew, Valid: true},
+			FilePath:   pgtype.Text{Valid: false},
+			Format:     db.NullMediaFormat{MediaFormat: db.MediaFormat(req.TargetFormat), Valid: req.TargetFormat != ""},
+		})
+
+		if err != nil {
+			slog.Error("Failed to create playlist entry", "error", err)
+			continue
+		}
+		slog.Info("Playlist entry created", "title", entry.Title, "url", entry.URL)
+	}
+
+	writeJSON(w, http.StatusCreated, playlist)
 }

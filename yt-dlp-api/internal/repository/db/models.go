@@ -14,6 +14,7 @@ import (
 type EntryStatus string
 
 const (
+	EntryStatusNew         EntryStatus = "new"
 	EntryStatusPending     EntryStatus = "pending"
 	EntryStatusDownloading EntryStatus = "downloading"
 	EntryStatusCompleted   EntryStatus = "completed"
@@ -104,10 +105,11 @@ func (ns NullMediaFormat) Value() (driver.Value, error) {
 }
 
 type Playlist struct {
-	ID           int64
-	Url          string
-	Title        pgtype.Text
-	TargetFormat NullMediaFormat
+	ID        int64
+	Url       string
+	Title     pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type PlaylistEntry struct {
@@ -116,10 +118,10 @@ type PlaylistEntry struct {
 	VideoID    string
 	Title      pgtype.Text
 	Artist     pgtype.Text
-	Duration   pgtype.Int8
+	Duration   pgtype.Int4
 	Thumbnail  pgtype.Text
-	FilePath   pgtype.Text
 	Status     NullEntryStatus
+	FilePath   pgtype.Text
 	Format     NullMediaFormat
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz

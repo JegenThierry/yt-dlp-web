@@ -8,10 +8,13 @@ import (
 type YtDlpMetadata struct {
 	Title   string `json:"title"`
 	Entries []struct {
-		ID       string  `json:"id"`
-		Title    string  `json:"title"`
-		Duration float64 `json:"duration"`
-		URL      string  `json:"url"`
+		ID        string  `json:"id"`
+		Title     string  `json:"title"`
+		Artist    string  `json:"artist"`
+		Uploader  string  `json:"uploader"`
+		Thumbnail string  `json:"thumbnail"`
+		Duration  float64 `json:"duration"`
+		URL       string  `json:"url"`
 	} `json:"entries"`
 }
 
