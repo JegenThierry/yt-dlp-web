@@ -11,7 +11,7 @@ const textClass = computed(() =>
 </script>
 
 <template>
-  <RouterLink to="/" class="no-underline font-bold" :class="textClass">
-    YT-DL UI
+  <RouterLink to="/" class="uppercase no-underline font-bold" :class="textClass">
+    yt-dlp-ui
   </RouterLink>
 </template>

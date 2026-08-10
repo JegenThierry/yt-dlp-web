@@ -59,13 +59,14 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, entry := range metadata.Entries {
+		thumbnail := entry.GetThumbnail()
 		_, err := h.Queries.CreatePlaylistEntry(r.Context(), db.CreatePlaylistEntryParams{
 			PlaylistID: playlist.ID,
 			VideoID:    entry.ID,
 			Title:      pgtype.Text{String: entry.Title, Valid: true},
 			Artist:     pgtype.Text{String: entry.Uploader, Valid: entry.Uploader != ""},
 			Duration:   pgtype.Int4{Int32: int32(entry.Duration), Valid: true},
-			Thumbnail:  pgtype.Text{String: entry.Thumbnail, Valid: entry.Thumbnail != ""},
+			Thumbnail:  pgtype.Text{String: thumbnail, Valid: thumbnail != ""},
 			Status:     db.NullEntryStatus{EntryStatus: db.EntryStatusNew, Valid: true},
 			FilePath:   pgtype.Text{Valid: false},
 			Format:     db.NullMediaFormat{MediaFormat: db.MediaFormat(req.TargetFormat), Valid: req.TargetFormat != ""},
@@ -75,7 +76,7 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 			slog.Error("Failed to create playlist entry", "error", err)
 			continue
 		}
-		slog.Info("Playlist entry created", "title", entry.Title, "url", entry.URL)
+		slog.Info("Playlist entry created", "title", entry.Title, "url", entry.URL, "thumbnail", thumbnail)
 	}
 
 	writeJSON(w, http.StatusCreated, playlist)
