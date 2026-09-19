@@ -78,5 +78,39 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 		slog.Info("Playlist entry created", "title", entry.Title, "url", entry.URL)
 	}
 
-	writeJSON(w, http.StatusCreated, playlist)
+	entries, err := h.Queries.FetchPlaylistEntries(r.Context(), playlist.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch playlist entries")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, models.Playlist{
+		ID:        playlist.ID,
+		URL:       playlist.Url,
+		Title:     playlist.Title.String,
+		Entries:   toPlaylistEntryModels(entries),
+		CreatedAt: playlist.CreatedAt.Time,
+		UpdatedAt: playlist.UpdatedAt.Time,
+	})
+}
+
+func toPlaylistEntryModels(entries []db.PlaylistEntry) []models.PlaylistEntry {
+	modelsEntries := make([]models.PlaylistEntry, 0, len(entries))
+	for _, e := range entries {
+		modelsEntries = append(modelsEntries, models.PlaylistEntry{
+			ID:         e.ID,
+			PlaylistID: e.PlaylistID,
+			VideoID:    e.VideoID,
+			Title:      e.Title.String,
+			Artist:     e.Artist.String,
+			Duration:   int64(e.Duration.Int32),
+			Thumbnail:  e.Thumbnail.String,
+			Status:     models.DownloadStatus(e.Status.EntryStatus),
+			FilePath:   e.FilePath.String,
+			Format:     models.AudioFormat(e.Format.MediaFormat),
+			CreatedAt:  e.CreatedAt.Time,
+			UpdatedAt:  e.UpdatedAt.Time,
+		})
+	}
+	return modelsEntries
 }

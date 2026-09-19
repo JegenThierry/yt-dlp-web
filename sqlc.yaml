@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "yt-dlp-api/internal/repository/queries.sql"
+    queries: "yt-dlp-api/internal/repository/"
     schema: "yt-dlp-db/migrations"
     gen:
       go:

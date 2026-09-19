@@ -1,0 +1,22 @@
+{
+  "languages": {
+    "Vue": {
+      "language_servers": [
+        "vue-language-server",
+        "tailwindcss-language-server",
+        "!typescript-language-server"
+      ]
+    },
+    "TypeScript": {
+      "language_servers": ["typescript-language-server"]
+    }
+  },
+  "lsp": {
+    "vue-language-server": {
+      "binary": {
+        "path_lookup": true
+      },
+      "arguments": ["--stdio"]
+    }
+  }
+}
