@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 
 	"ytdl-api/internal/models"
@@ -24,7 +25,18 @@ func (h *PlaylistHandler) FetchPlaylists(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, playlists)
+	playlistModels := make([]models.Playlist, 0, len(playlists))
+	for _, p := range playlists {
+		playlistModels = append(playlistModels, models.Playlist{
+			ID:        p.ID,
+			URL:       p.Url,
+			Title:     p.Title.String,
+			CreatedAt: p.CreatedAt.Time,
+			UpdatedAt: p.UpdatedAt.Time,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, playlistModels)
 }
 
 func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +76,7 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 			VideoID:    entry.ID,
 			Title:      pgtype.Text{String: entry.Title, Valid: true},
 			Artist:     pgtype.Text{String: entry.Uploader, Valid: entry.Uploader != ""},
-			Duration:   pgtype.Int4{Int32: int32(entry.Duration), Valid: true},
+			Duration:   pgtype.Int4{Int32: int32(math.Min(math.Max(entry.Duration, 0), math.MaxInt32)), Valid: true},
 			Thumbnail:  pgtype.Text{String: entry.Thumbnail, Valid: entry.Thumbnail != ""},
 			Status:     db.NullEntryStatus{EntryStatus: db.EntryStatusNew, Valid: true},
 			FilePath:   pgtype.Text{Valid: false},
