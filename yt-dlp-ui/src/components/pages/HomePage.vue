@@ -5,6 +5,7 @@ import FormWrapper from '@/components/layouts/FormWrapper.vue'
 import DownloadButton from '@/components/molecules/buttons/DownloadButton.vue'
 import { AudioFormat } from '@/models/enums'
 import type { CreatePlaylistRequest } from '@/models/playlist'
+import ContentContainer from '../layouts/ContentContainer.vue'
 
 interface DownloadForm {
   url: string
@@ -29,22 +30,27 @@ function buildCreatePlaylistRequest(values: DownloadForm): CreatePlaylistRequest
 </script>
 
 <template>
-  <div class="max-w-180 mx-auto p-4 space-y-4">
-    <div class="mx-auto p-4 border border-default rounded">
-      <h3 class="text-lg font-semibold mb-4">Download</h3>
-      <FormWrapper
-        :initial-values="{ url: '' }"
-        :on-submit="handleDownload"
-        v-slot="{ state, loading }"
-      >
-        <InputText
-          v-model="state.url"
-          label="Video URL"
-          placeholder="https://youtube.com/..."
-          required
-        />
-        <DownloadButton :loading="loading" :disabled="!state.url" type="submit" />
-      </FormWrapper>
-    </div>
-  </div>
+  <ContentContainer>
+    <template #header>
+      <h3 class="text-lg font-semibold">Download</h3>
+    </template>
+
+    <FormWrapper
+      :initial-values="{ url: '' }"
+      :on-submit="handleDownload"
+      v-slot="{ state, loading }"
+    >
+      <InputText
+        v-model="state.url"
+        label="Video URL"
+        placeholder="https://youtube.com/..."
+        required
+      />
+      <DownloadButton
+        :loading="loading"
+        :disabled="!state.url"
+        type="submit"
+      />
+    </FormWrapper>
+  </ContentContainer>
 </template>
