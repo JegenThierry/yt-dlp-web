@@ -49,6 +49,44 @@ Applying migrations to the database:
 migrate -path yt-dlp-db/migrations -database "postgres://<user>:<pass>@<url>:<port>/<db>?sslmode=disable" up
 ``` 
 
+### Backend
+
+First you will need to update the `.env` file
+
+```bash
+cd yt-dlp-api
+cp .env.example .env
+```
+
+Adjust the values according to your preferences.
+
+Ensure you have `go` installed on your system.
+
+
+```bash
+cd yt-dlp-api
+go run cmd/api/main.go
+```
+
+This will fetch dependencies and run the Backend.
+
+### Frontend
+
+First you will need to update the `.env` file
+
+```bash
+cd yt-dlp-ui
+cp .env.example .env
+```
+
+You should have node and `pnpm` installed on your system `npm` will work too, personally I develop with pnpm
+
+```bash
+cd yt-dlp-ui
+pnpm i # install dependencies
+pnpm run dev # launch dev server
+```
+
 ## General Workflow
 
 1. **Client Request**: The client sends a URL and filter configuration.
