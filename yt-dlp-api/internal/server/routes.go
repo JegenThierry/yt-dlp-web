@@ -14,4 +14,5 @@ func (Server *Server) registerRoutes() {
 	// Server.router...
 	Server.router.HandleFunc("POST /api/playlists", playlistHandler.CreatePlaylist)
 	Server.router.HandleFunc("GET /api/playlists", playlistHandler.FetchPlaylists)
+	Server.router.HandleFunc("GET /api/playlists/{id}", playlistHandler.GetPlaylist)
 }

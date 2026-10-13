@@ -10,3 +10,8 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
   const { data } = await axiosInstance.get<Playlist[]>('/playlists')
   return data
 }
+
+export async function fetchPlaylist(id: number): Promise<Playlist> {
+  const { data } = await axiosInstance.get<Playlist>(`/playlists/${id}`)
+  return data
+}

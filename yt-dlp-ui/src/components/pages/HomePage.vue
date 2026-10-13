@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import UCard from '@nuxt/ui/components/Card.vue'
 import { createPlaylist } from '@/api/playlistService'
 import InputText from '@/components/atoms/inputs/InputText.vue'
-import FormWrapper from '@/components/layouts/FormWrapper.vue'
 import DownloadButton from '@/components/molecules/buttons/DownloadButton.vue'
+import PageLayout from '@/components/layouts/PageLayout.vue'
+import FormWrapper from '@/components/layouts/FormWrapper.vue'
 import { AudioFormat } from '@/models/enums'
 import type { CreatePlaylistRequest } from '@/models/playlist'
-import ContentContainer from '../layouts/ContentContainer.vue'
 
 interface DownloadForm {
   url: string
@@ -30,23 +31,22 @@ function buildCreatePlaylistRequest(values: DownloadForm): CreatePlaylistRequest
 </script>
 
 <template>
-  <ContentContainer>
-    <template #header>
-      <h3 class="text-lg font-semibold">Download</h3>
-    </template>
-
-    <FormWrapper
-      :initial-values="{ url: '' }"
-      :on-submit="handleDownload"
-      v-slot="{ state, loading }"
-    >
-      <InputText
-        v-model="state.url"
-        label="Video URL"
-        placeholder="youtube.com/video-url"
-        required
-      />
-      <DownloadButton :loading="loading" :disabled="!state.url" type="submit" />
-    </FormWrapper>
-  </ContentContainer>
+  <PageLayout title="Download">
+    <UCard variant="outline">
+      <FormWrapper
+        :initial-values="{ url: '' }"
+        :on-submit="handleDownload"
+        v-slot="{ state, loading }"
+      >
+        <InputText
+          v-model="state.url"
+          label="Video URL"
+          placeholder="youtube.com/video-url"
+          icon="i-lucide-link"
+          required
+        />
+        <DownloadButton :loading="loading" :disabled="!state.url" type="submit" />
+      </FormWrapper>
+    </UCard>
+  </PageLayout>
 </template>

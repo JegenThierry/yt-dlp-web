@@ -1,8 +1,11 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import PageLayout from '@/components/layouts/PageLayout.vue'
+</script>
 
 <template>
-  <div class="max-w-[720px] mx-auto p-4 border border-default rounded">
-    <h3 class="text-lg font-semibold mb-4">About</h3>
-    <p>A frontend for yt-dlp.</p>
-  </div>
+  <PageLayout title="About">
+    <div class="max-w-5xl space-y-4">
+      <p class="text-muted text-sm leading-6">A frontend for yt-dlp.</p>
+    </div>
+  </PageLayout>
 </template>

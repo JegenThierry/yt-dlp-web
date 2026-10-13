@@ -5,12 +5,13 @@ import (
 )
 
 type Playlist struct {
-	ID        int64           `json:"id"`
-	URL       string          `json:"url"`
-	Title     string          `json:"title"`
-	Entries   []PlaylistEntry `json:"entries"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID         int64           `json:"id"`
+	URL        string          `json:"url"`
+	Title      string          `json:"title"`
+	Entries    []PlaylistEntry `json:"entries"`
+	EntryCount int64           `json:"entry_count"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
 type CreatePlaylistRequest struct {

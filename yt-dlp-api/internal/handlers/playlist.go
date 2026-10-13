@@ -2,19 +2,58 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"math"
 	"net/http"
+	"strconv"
 
 	"ytdl-api/internal/models"
 	"ytdl-api/internal/repository/db"
 	"ytdl-api/pkg/ytdlp"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PlaylistHandler struct {
 	Queries *db.Queries
+}
+
+func (h *PlaylistHandler) GetPlaylist(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusBadRequest, "invalid playlist id")
+		return
+	}
+
+	playlist, err := h.Queries.FetchPlaylistByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "playlist not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to fetch playlist")
+		return
+	}
+
+	entries, err := h.Queries.FetchPlaylistEntries(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch playlist entries")
+		return
+	}
+
+	slog.Debug("Fetched playlist", "id", id, "entries", len(entries))
+
+	writeJSON(w, http.StatusOK, models.Playlist{
+		ID:         playlist.ID,
+		URL:        playlist.Url,
+		Title:      playlist.Title.String,
+		Entries:    toPlaylistEntryModels(entries),
+		EntryCount: int64(len(entries)),
+		CreatedAt:  playlist.CreatedAt.Time,
+		UpdatedAt:  playlist.UpdatedAt.Time,
+	})
 }
 
 func (h *PlaylistHandler) FetchPlaylists(w http.ResponseWriter, r *http.Request) {
@@ -28,11 +67,12 @@ func (h *PlaylistHandler) FetchPlaylists(w http.ResponseWriter, r *http.Request)
 	playlistModels := make([]models.Playlist, 0, len(playlists))
 	for _, p := range playlists {
 		playlistModels = append(playlistModels, models.Playlist{
-			ID:        p.ID,
-			URL:       p.Url,
-			Title:     p.Title.String,
-			CreatedAt: p.CreatedAt.Time,
-			UpdatedAt: p.UpdatedAt.Time,
+			ID:         p.ID,
+			URL:        p.Url,
+			Title:      p.Title.String,
+			EntryCount: p.EntryCount,
+			CreatedAt:  p.CreatedAt.Time,
+			UpdatedAt:  p.UpdatedAt.Time,
 		})
 	}
 
@@ -97,12 +137,13 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusCreated, models.Playlist{
-		ID:        playlist.ID,
-		URL:       playlist.Url,
-		Title:     playlist.Title.String,
-		Entries:   toPlaylistEntryModels(entries),
-		CreatedAt: playlist.CreatedAt.Time,
-		UpdatedAt: playlist.UpdatedAt.Time,
+		ID:         playlist.ID,
+		URL:        playlist.Url,
+		Title:      playlist.Title.String,
+		Entries:    toPlaylistEntryModels(entries),
+		EntryCount: int64(len(entries)),
+		CreatedAt:  playlist.CreatedAt.Time,
+		UpdatedAt:  playlist.UpdatedAt.Time,
 	})
 }
 

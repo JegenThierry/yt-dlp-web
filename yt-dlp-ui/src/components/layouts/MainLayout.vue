@@ -12,7 +12,7 @@ const sidebarOpen = ref(true)
 const navItems: NavigationMenuItem[] = [
   { label: 'Home', icon: 'i-lucide-house', to: '/' },
   { label: 'About', icon: 'i-lucide-info', to: '/about' },
-  { label: 'Playlists', icon: 'i-lucide-info', to: '/playlists' },
+  { label: 'Playlists', icon: 'i-lucide-list-music', to: '/playlists' },
 ]
 </script>
 

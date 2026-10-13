@@ -1,10 +1,12 @@
 -- name: FetchAllPlaylists :many
-SELECT * FROM playlists ORDER BY created_at DESC;
+SELECT p.*, COUNT(e.id) AS entry_count
+FROM playlists p
+LEFT JOIN playlist_entries e ON e.playlist_id = p.id
+GROUP BY p.id
+ORDER BY p.created_at DESC;
 
 -- name: FetchPlaylistByID :one
-SELECT * FROM playlists 
-INNER JOIN playlist_entries ON playlists.id = playlist_entries.playlist_id 
-WHERE playlists.id = $1;
+SELECT * FROM playlists WHERE id = $1;
 
 -- name: CreatePlaylist :one
 INSERT INTO playlists (url, title, created_at, updated_at) 

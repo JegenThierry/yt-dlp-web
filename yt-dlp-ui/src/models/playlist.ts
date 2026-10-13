@@ -11,6 +11,7 @@ export interface Playlist {
   url: string
   title: string
   entries?: PlaylistEntry[]
+  entry_count: number
   created_at: Date
   updated_at: Date
 }
