@@ -48,5 +48,5 @@ AGENTS.md
 opencode.jsonc
 
 # Downloade
-downloads/*
-.downloads/*
+/downloads/*
+/.downloads/*
