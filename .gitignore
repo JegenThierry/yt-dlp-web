@@ -46,3 +46,7 @@ __screenshots__/
 AGENTS.md
 .opencode/*
 opencode.jsonc
+
+# Downloade
+downloads/*
+.downloads/*
