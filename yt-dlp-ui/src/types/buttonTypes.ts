@@ -1,29 +1,8 @@
 export type ButtonColor =
-  | 'primary'
-  | 'secondary'
-  | 'success'
-  | 'info'
-  | 'warning'
-  | 'error'
-  | 'neutral'
+  'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'
 
-export type ButtonSize =
-  | 'xs'
-  | 'sm'
-  | 'md'
-  | 'lg'
-  | 'xl'
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
-export type ButtonVariant =
-  | 'solid'
-  | 'outline'
-  | 'soft'
-  | 'subtle'
-  | 'ghost'
-  | 'link'
+export type ButtonVariant = 'solid' | 'outline' | 'soft' | 'subtle' | 'ghost' | 'link'
 
-
-export type ButtonType =
-  | 'button'
-  | 'submit'
-  | 'reset'
+export type ButtonType = 'button' | 'submit' | 'reset'

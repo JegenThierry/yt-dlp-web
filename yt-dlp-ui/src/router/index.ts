@@ -6,9 +6,8 @@ const router = createRouter({
   routes,
 })
 
-
 router.afterEach((to) => {
   document.title = `${to.meta.title}` || 'yt-dlp-ui'
-});
+})
 
 export default router

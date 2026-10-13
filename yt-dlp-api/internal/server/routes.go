@@ -12,6 +12,6 @@ func (Server *Server) registerRoutes() {
 	playlistHandler := handlers.PlaylistHandler{Queries: queries}
 
 	// Server.router...
-	Server.router.HandleFunc("POST /playlists", playlistHandler.CreatePlaylist)
-	Server.router.HandleFunc("GET /playlists", playlistHandler.FetchPlaylists)
+	Server.router.HandleFunc("POST /api/playlists", playlistHandler.CreatePlaylist)
+	Server.router.HandleFunc("GET /api/playlists", playlistHandler.FetchPlaylists)
 }

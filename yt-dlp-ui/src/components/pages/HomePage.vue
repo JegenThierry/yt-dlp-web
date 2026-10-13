@@ -43,14 +43,10 @@ function buildCreatePlaylistRequest(values: DownloadForm): CreatePlaylistRequest
       <InputText
         v-model="state.url"
         label="Video URL"
-        placeholder="https://youtube.com/..."
+        placeholder="youtube.com/video-url"
         required
       />
-      <DownloadButton
-        :loading="loading"
-        :disabled="!state.url"
-        type="submit"
-      />
+      <DownloadButton :loading="loading" :disabled="!state.url" type="submit" />
     </FormWrapper>
   </ContentContainer>
 </template>

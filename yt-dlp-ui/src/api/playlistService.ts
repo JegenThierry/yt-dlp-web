@@ -1,10 +1,12 @@
-import type { CreatePlaylistRequest, Playlist } from "@/models/playlist";
-import { api } from "./apiClient";
+import type { CreatePlaylistRequest, Playlist } from '@/models/playlist'
+import axiosInstance from './apiClient'
 
 export async function createPlaylist(request: CreatePlaylistRequest): Promise<Playlist> {
-  return await api.post<Playlist>('/playlists', request);
+  const { data } = await axiosInstance.post<Playlist>('/playlists', request)
+  return data
 }
 
 export async function fetchPlaylists(): Promise<Playlist[]> {
-  return await api.get<Playlist[]>('/playlists');
+  const { data } = await axiosInstance.get<Playlist[]>('/playlists')
+  return data
 }

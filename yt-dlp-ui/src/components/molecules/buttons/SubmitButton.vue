@@ -14,13 +14,7 @@ withDefaults(defineProps<SubmitButtonProps>(), {
 </script>
 
 <template>
-  <BaseButton
-    :type="type"
-    label="Submit"
-    color="primary"
-    :disabled="disabled"
-    :loading="loading"
-  />
+  <BaseButton :type="type" label="Submit" color="primary" :disabled="disabled" :loading="loading" />
 </template>
 
 <style scoped></style>
