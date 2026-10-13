@@ -54,7 +54,7 @@ const songCount = computed(() => playlist.value?.entries?.length ?? 0)
 </script>
 
 <template>
-  <PageLayout>
+  <PageLayout :title="playlist?.title">
     <template #navigation>
       <UButton
         to="/playlists"

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import UBadge from '@nuxt/ui/components/Badge.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import ULink from '@nuxt/ui/components/Link.vue'
+import UTooltip from '@nuxt/ui/components/Tooltip.vue'
 import type { Playlist } from '@/models/playlist'
 import { formatDate } from '@/utils/format'
 
@@ -34,9 +35,11 @@ const songLabel = computed(
         <UIcon name="i-lucide-list-music" class="size-5 text-muted" />
       </div>
 
-      <h2 class="text-highlighted min-w-0 flex-1 truncate text-base font-semibold">
-        {{ playlist.title }}
-      </h2>
+      <UTooltip :text="playlist.title" class="min-w-0 max-w-full flex-1">
+        <h2 class="text-highlighted truncate text-base font-semibold">
+          {{ playlist.title }}
+        </h2>
+      </UTooltip>
 
       <UBadge
         color="neutral"
