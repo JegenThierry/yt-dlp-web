@@ -44,9 +44,11 @@ __screenshots__/
 
 # AI
 AGENTS.md
+CLAUDE.md
 .opencode/*
 opencode.jsonc
 
-# Downloade
+# Downloads
+**/downloads/
 /downloads/*
 /.downloads/*

@@ -6,10 +6,12 @@ interface DownloadButtonProps {
   disabled?: boolean
   loading?: boolean
   type?: ButtonType
+  label?: string
 }
 
 withDefaults(defineProps<DownloadButtonProps>(), {
   type: 'button',
+  label: 'Download',
 })
 
 const emit = defineEmits<{
@@ -25,7 +27,7 @@ function onClick(event: MouseEvent) {
   <BaseButton
     color="primary"
     variant="solid"
-    label="Download"
+    :label="label"
     icon="i-lucide-download"
     size="md"
     :type="type"

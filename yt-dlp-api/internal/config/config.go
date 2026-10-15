@@ -6,8 +6,11 @@ import (
 )
 
 type Config struct {
-	ApiPort     string
-	DatabaseURL string
+	ApiPort            string
+	DatabaseURL        string
+	DownloadDir        string
+	CookiesFromBrowser string
+	CookiesFile        string
 }
 
 func LoadConfig() (Config, error) {
@@ -41,11 +44,23 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 
+	downloadDir, err := required("DOWNLOAD_DIR")
+	if err != nil {
+		return Config{}, err
+	}
+
 	dbURL := buildDatabaseURL(dbHost, dbPort, dbUser, dbPassword, dbName)
 
+	// Optional YouTube authentication. Passing logged-in cookies to yt-dlp
+	cookiesFromBrowser := os.Getenv("YT_COOKIES_FROM_BROWSER")
+	cookiesFile := os.Getenv("YT_COOKIES_FILE")
+
 	return Config{
-		ApiPort:     apiPort,
-		DatabaseURL: dbURL,
+		ApiPort:            apiPort,
+		DatabaseURL:        dbURL,
+		DownloadDir:        downloadDir,
+		CookiesFromBrowser: cookiesFromBrowser,
+		CookiesFile:        cookiesFile,
 	}, nil
 }
 

@@ -54,7 +54,7 @@ const navItems: NavigationMenuItem[] = [
         />
       </div>
 
-      <main class="flex-1 p-4">
+      <main class="flex-1 overflow-y-auto p-4">
         <slot />
       </main>
     </div>

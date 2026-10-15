@@ -13,10 +13,7 @@ interface PlaylistRowProps {
 
 const props = defineProps<PlaylistRowProps>()
 
-const to = computed(() => ({
-  name: '/playlists/[id]' as const,
-  params: { id: props.playlist.id },
-}))
+const to = computed(() => `/playlists/${props.playlist.id}`)
 
 const songLabel = computed(
   () => `${props.playlist.entry_count} ${props.playlist.entry_count === 1 ? 'song' : 'songs'}`,

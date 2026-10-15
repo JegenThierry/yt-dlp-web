@@ -125,4 +125,6 @@ type PlaylistEntry struct {
 	Format     NullMediaFormat
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	Genre      pgtype.Text
+	Year       pgtype.Int4
 }

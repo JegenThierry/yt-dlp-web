@@ -13,6 +13,15 @@ const (
 	ALAC   AudioFormat = "alac"
 )
 
+type AudioQuality string
+
+const (
+	QualityBest     AudioQuality = "best"
+	QualityHigh     AudioQuality = "high"
+	QualityStandard AudioQuality = "standard"
+	QualityLow      AudioQuality = "low"
+)
+
 type DownloadStatus string
 
 const (

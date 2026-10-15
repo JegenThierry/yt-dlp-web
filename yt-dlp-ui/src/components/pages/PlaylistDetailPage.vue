@@ -1,26 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import UBadge from '@nuxt/ui/components/Badge.vue'
 import UButton from '@nuxt/ui/components/Button.vue'
 import UCard from '@nuxt/ui/components/Card.vue'
 import UEmpty from '@nuxt/ui/components/Empty.vue'
-import UIcon from '@nuxt/ui/components/Icon.vue'
 import USkeleton from '@nuxt/ui/components/Skeleton.vue'
 import PageLayout from '@/components/layouts/PageLayout.vue'
-import PlaylistEntryItem from '@/components/molecules/PlaylistEntryItem.vue'
+import SongList from '@/components/molecules/SongList.vue'
 import { fetchPlaylist } from '@/api/playlistService'
+import { subscribePlaylistEvents } from '@/api/downloadService'
+import { DownloadStatus } from '@/models/enums'
 import type { Playlist } from '@/models/playlist'
+import type { ProgressEvent } from '@/models/download'
 import { formatDate } from '@/utils/format'
 
-const route = useRoute('/playlists/[id]')
+const route = useRoute()
 
 const playlist = ref<Playlist | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const unsubscribe = ref<(() => void) | null>(null)
 
-const playlistId = computed(() => Number(route.params.id))
+const playlistId = computed(() => Number((route.params as { id?: string }).id))
 
 async function loadPlaylist() {
   const id = playlistId.value
@@ -36,6 +39,7 @@ async function loadPlaylist() {
 
   try {
     playlist.value = await fetchPlaylist(id)
+    subscribeToProgress(id)
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 404) {
       error.value = 'This playlist does not exist.'
@@ -48,9 +52,54 @@ async function loadPlaylist() {
   }
 }
 
+function subscribeToProgress(id: number) {
+  unsubscribe.value?.()
+
+  unsubscribe.value = subscribePlaylistEvents(id, (event: ProgressEvent) => {
+    const current = playlist.value
+    if (!current || current.id !== event.playlist_id) return
+
+    const entries = (current.entries ?? []).map((entry) =>
+      entry.id === event.entry_id
+        ? { ...entry, status: event.status, file_path: event.file_path ?? entry.file_path }
+        : entry,
+    )
+
+    playlist.value = { ...current, entries }
+    maybeStopListening()
+  })
+}
+
+function maybeStopListening() {
+  const entries = playlist.value?.entries ?? []
+  if (entries.length === 0) return
+
+  const stillRunning = entries.some(
+    (entry) => entry.status !== DownloadStatus.Completed && entry.status !== DownloadStatus.Failed,
+  )
+
+  if (!stillRunning) unsubscribe.value?.()
+}
+
+function handlePlaylistUpdate(updated: Playlist) {
+  playlist.value = updated
+  if (!unsubscribe.value) subscribeToProgress(updated.id)
+  else maybeStopListening()
+}
+
 onMounted(loadPlaylist)
+onBeforeUnmount(() => unsubscribe.value?.())
 
 const songCount = computed(() => playlist.value?.entries?.length ?? 0)
+
+// True once every entry has reached a terminal state (completed or failed).
+const allComplete = computed(() => {
+  const entries = playlist.value?.entries ?? []
+  if (entries.length === 0) return false
+  return entries.every(
+    (entry) => entry.status === DownloadStatus.Completed || entry.status === DownloadStatus.Failed,
+  )
+})
 </script>
 
 <template>
@@ -88,6 +137,13 @@ const songCount = computed(() => playlist.value?.entries?.length ?? 0)
     </template>
 
     <template v-if="playlist" #actions>
+      <UButton
+        :to="`/playlists/${playlist.id}/edit`"
+        icon="i-lucide-pen-line"
+        color="neutral"
+        variant="outline"
+        label="Clean up metadata"
+      />
       <UButton
         :to="playlist.url"
         target="_blank"
@@ -134,14 +190,7 @@ const songCount = computed(() => playlist.value?.entries?.length ?? 0)
         <h2 class="font-semibold">Songs</h2>
       </template>
 
-      <ul v-if="songCount > 0" class="divide-y divide-default overflow-y-auto max-h-[60vh]">
-        <PlaylistEntryItem v-for="entry in playlist.entries" :key="entry.id" :entry="entry" />
-      </ul>
-
-      <div v-else class="flex flex-col items-center gap-2 py-8 text-center">
-        <UIcon name="i-lucide-music" class="text-dimmed size-8" />
-        <p class="text-muted text-sm">No songs were found for this playlist.</p>
-      </div>
+      <SongList :playlist="playlist" :all-complete="allComplete" @update:playlist="handlePlaylistUpdate" />
     </UCard>
   </PageLayout>
 </template>

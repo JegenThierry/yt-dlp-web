@@ -16,3 +16,10 @@ export enum AudioFormat {
   VORBIS = 'vorbis',
   ALAC = 'alac',
 }
+
+export enum AudioQuality {
+  Best = 'best',
+  High = 'high',
+  Standard = 'standard',
+  Low = 'low',
+}

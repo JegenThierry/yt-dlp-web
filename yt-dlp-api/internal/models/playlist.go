@@ -18,3 +18,9 @@ type CreatePlaylistRequest struct {
 	URL          string      `json:"url"`
 	TargetFormat AudioFormat `json:"target_format"`
 }
+
+type DownloadPlaylistRequest struct {
+	Filters *FilterOptions `json:"filters,omitempty"`
+}
+
+func (r *DownloadPlaylistRequest) FilterOptions() *FilterOptions { return r.Filters }

@@ -8,6 +8,8 @@ type PlaylistEntry struct {
 	VideoID    string         `json:"video_id"`
 	Title      string         `json:"title"`
 	Artist     string         `json:"artist"`
+	Genre      string         `json:"genre"`
+	Year       int64          `json:"year"`
 	Duration   int64          `json:"duration"`
 	Thumbnail  string         `json:"thumbnail"`
 	Status     DownloadStatus `json:"status"`
@@ -16,3 +18,16 @@ type PlaylistEntry struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 }
+
+type PlaylistEntryMetadataUpdate struct {
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+	Genre  string `json:"genre"`
+	Year   int64  `json:"year"`
+}
+
+type DownloadEntryRequest struct {
+	Filters *FilterOptions `json:"filters,omitempty"`
+}
+
+func (r *DownloadEntryRequest) FilterOptions() *FilterOptions { return r.Filters }

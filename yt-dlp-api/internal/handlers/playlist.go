@@ -116,6 +116,8 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 			VideoID:    entry.ID,
 			Title:      pgtype.Text{String: entry.Title, Valid: true},
 			Artist:     pgtype.Text{String: entry.Uploader, Valid: entry.Uploader != ""},
+			Genre:      pgtype.Text{Valid: false},
+			Year:       pgtype.Int4{Valid: false},
 			Duration:   pgtype.Int4{Int32: int32(math.Min(math.Max(entry.Duration, 0), math.MaxInt32)), Valid: true},
 			Thumbnail:  pgtype.Text{String: entry.Thumbnail, Valid: entry.Thumbnail != ""},
 			Status:     db.NullEntryStatus{EntryStatus: db.EntryStatusNew, Valid: true},
@@ -147,6 +149,44 @@ func (h *PlaylistHandler) CreatePlaylist(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (h *PlaylistHandler) UpdateEntryMetadata(w http.ResponseWriter, r *http.Request) {
+	entryID, err := strconv.ParseInt(r.PathValue("entryId"), 10, 64)
+	if err != nil || entryID < 1 {
+		writeError(w, http.StatusBadRequest, "invalid entry id")
+		return
+	}
+
+	var req models.PlaylistEntryMetadataUpdate
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Year != 0 && (req.Year < 1900 || req.Year > 2100) {
+		writeError(w, http.StatusBadRequest, "year must be between 1900 and 2100")
+		return
+	}
+
+	entry, err := h.Queries.UpdatePlaylistEntryMetadata(r.Context(), db.UpdatePlaylistEntryMetadataParams{
+		ID:     entryID,
+		Title:  pgtype.Text{String: req.Title, Valid: true},
+		Artist: pgtype.Text{String: req.Artist, Valid: true},
+		Genre:  pgtype.Text{String: req.Genre, Valid: true},
+		Year:   pgtype.Int4{Int32: int32(req.Year), Valid: req.Year != 0},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "playlist entry not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to update playlist entry metadata")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toPlaylistEntryModels([]db.PlaylistEntry{entry})[0])
+}
+
 func toPlaylistEntryModels(entries []db.PlaylistEntry) []models.PlaylistEntry {
 	modelsEntries := make([]models.PlaylistEntry, 0, len(entries))
 	for _, e := range entries {
@@ -156,6 +196,8 @@ func toPlaylistEntryModels(entries []db.PlaylistEntry) []models.PlaylistEntry {
 			VideoID:    e.VideoID,
 			Title:      e.Title.String,
 			Artist:     e.Artist.String,
+			Genre:      e.Genre.String,
+			Year:       int64(e.Year.Int32),
 			Duration:   int64(e.Duration.Int32),
 			Thumbnail:  e.Thumbnail.String,
 			Status:     models.DownloadStatus(e.Status.EntryStatus),

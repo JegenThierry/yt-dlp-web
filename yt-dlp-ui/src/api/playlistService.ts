@@ -1,4 +1,5 @@
 import type { CreatePlaylistRequest, Playlist } from '@/models/playlist'
+import type { PlaylistEntry, PlaylistEntryMetadataUpdate } from '@/models/playlistEntry'
 import axiosInstance from './apiClient'
 
 export async function createPlaylist(request: CreatePlaylistRequest): Promise<Playlist> {
@@ -13,5 +14,16 @@ export async function fetchPlaylists(): Promise<Playlist[]> {
 
 export async function fetchPlaylist(id: number): Promise<Playlist> {
   const { data } = await axiosInstance.get<Playlist>(`/playlists/${id}`)
+  return data
+}
+
+export async function updatePlaylistEntryMetadata(
+  entryId: number,
+  metadata: PlaylistEntryMetadataUpdate,
+): Promise<PlaylistEntry> {
+  const { data } = await axiosInstance.patch<PlaylistEntry>(
+    `/playlists/entries/${entryId}/metadata`,
+    metadata,
+  )
   return data
 }

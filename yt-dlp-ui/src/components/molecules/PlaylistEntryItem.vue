@@ -1,15 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import UBadge from '@nuxt/ui/components/Badge.vue'
 import UIcon from '@nuxt/ui/components/Icon.vue'
 import StatusBadge from '@/components/atoms/badges/StatusBadge.vue'
+import IconButton from '@/components/molecules/buttons/IconButton.vue'
+import { DownloadStatus } from '@/models/enums'
 import type { PlaylistEntry } from '@/models/playlistEntry'
 import { formatDuration } from '@/utils/format'
 
 interface PlaylistEntryItemProps {
   entry: PlaylistEntry
+  downloading?: boolean
+  onDownload?: () => void
 }
 
-defineProps<PlaylistEntryItemProps>()
+const props = withDefaults(defineProps<PlaylistEntryItemProps>(), {
+  downloading: false,
+})
+
+const completed = computed(() => props.entry.status === DownloadStatus.Completed)
 </script>
 
 <template>
@@ -42,5 +51,17 @@ defineProps<PlaylistEntryItemProps>()
     />
 
     <StatusBadge :status="entry.status" />
+
+    <IconButton
+      v-if="onDownload"
+      :icon="completed ? 'i-lucide-folder-down' : 'i-lucide-download'"
+      :ariaLabel="completed ? `Save ${entry.title}` : `Download ${entry.title}`"
+      color="primary"
+      variant="ghost"
+      size="sm"
+      :loading="downloading"
+      :disabled="downloading"
+      @click="onDownload"
+    />
   </li>
 </template>
