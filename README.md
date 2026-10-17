@@ -59,7 +59,7 @@ Set `YTDLP_VERSION` in `.env` to pin a release instead.
 
 #### Cookies
 
-To use a YouTube account, export its cookies in Netscape format to `./cookies/cookies.txt`, uncomment the `./cookies` volume of `yt-dlp-api` and set `YT_COOKIES_FILE=/data/cookies/cookies.txt`. The file must be writable by uid 1000, because `yt-dlp` writes the cookie jar back. `YT_COOKIES_FROM_BROWSER` does not work inside the container.
+To use a YouTube account, export its cookies in Netscape format to `./cookies/cookies.txt` (the `./cookies` directory is bind-mounted into `yt-dlp-api` at `/data/cookies`) and set `YT_COOKIES_FILE=/data/cookies/cookies.txt`. The file must be writable by uid 1000, because `yt-dlp` writes the cookie jar back. `YT_COOKIES_FROM_BROWSER` does not work inside the container.
 
 ### Database
 
