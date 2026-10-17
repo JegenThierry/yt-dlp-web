@@ -4,6 +4,8 @@ This project provides a web interface for the command-line tool: `yt-dlp`.
 
 Please refer to the original [yt-dlp](https://github.com/yt-dlp/yt-dlp) repository for more information.
 
+![The "Add a playlist" page, with a recently added playlist below the form](assets/screenshot.png)
+
 ## Project Structure
 
 The project is split into different subprojects:
