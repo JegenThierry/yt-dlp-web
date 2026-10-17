@@ -7,19 +7,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"ytdl-api/internal/downloads"
 	"ytdl-api/internal/models"
 	"ytdl-api/internal/repository/db"
 
 	"github.com/jackc/pgx/v5"
+)
+
+const (
+	sseRetry        = 2 * time.Second
+	ssePingInterval = 15 * time.Second
 )
 
 type DownloadHandler struct {
@@ -34,37 +42,23 @@ func (h *DownloadHandler) DownloadPlaylist(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	playlist, err := h.Queries.FetchPlaylistByID(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "playlist not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to fetch playlist")
-		return
+	req := &models.DownloadPlaylistRequest{}
+	opts := decodeFilterOptions(r, req)
+
+	_, err = h.Manager.StartPlaylist(r.Context(), id, opts, req.RetryUnavailable)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		writeError(w, http.StatusNotFound, "playlist not found")
+	case errors.Is(err, downloads.ErrRunInProgress):
+		writeError(w, http.StatusConflict, "this playlist is already downloading")
+	case errors.Is(err, downloads.ErrNothingToDownload):
+		writeError(w, http.StatusConflict, "nothing left to download in this playlist")
+	case err != nil:
+		slog.Error("Failed to start playlist download", "playlist_id", id, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to start playlist download")
+	default:
+		w.WriteHeader(http.StatusAccepted)
 	}
-
-	entries, err := h.Queries.FetchPlaylistEntries(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch playlist entries")
-		return
-	}
-
-	opts := decodeFilterOptions(r, &models.DownloadPlaylistRequest{})
-
-	slog.Info("Starting playlist download", "playlist_id", id, "entries", len(entries))
-
-	go h.Manager.DownloadPlaylist(context.Background(), id, opts)
-
-	writeJSON(w, http.StatusAccepted, models.Playlist{
-		ID:         playlist.ID,
-		URL:        playlist.Url,
-		Title:      playlist.Title.String,
-		Entries:    toPlaylistEntryModels(entries),
-		EntryCount: int64(len(entries)),
-		CreatedAt:  playlist.CreatedAt.Time,
-		UpdatedAt:  playlist.UpdatedAt.Time,
-	})
 }
 
 func (h *DownloadHandler) DownloadEntry(w http.ResponseWriter, r *http.Request) {
@@ -74,36 +68,50 @@ func (h *DownloadHandler) DownloadEntry(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	entry, err := h.Queries.FetchPlaylistEntryByID(r.Context(), entryID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "playlist entry not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to fetch playlist entry")
+	opts := decodeFilterOptions(r, &models.DownloadEntryRequest{})
+
+	err = h.Manager.StartEntry(r.Context(), entryID, opts)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		writeError(w, http.StatusNotFound, "playlist entry not found")
+	case errors.Is(err, downloads.ErrAlreadyDownloading):
+		writeError(w, http.StatusConflict, "this song is already downloading")
+	case err != nil:
+		slog.Error("Failed to start entry download", "entry_id", entryID, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to start entry download")
+	default:
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func (h *DownloadHandler) CancelPlaylistDownload(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusBadRequest, "invalid playlist id")
 		return
 	}
 
-	opts := decodeFilterOptions(r, &models.DownloadEntryRequest{})
+	if _, err := h.Manager.CancelPlaylist(id); err != nil {
+		writeError(w, http.StatusConflict, "nothing is downloading in this playlist")
+		return
+	}
 
-	slog.Info("Starting entry download", "entry_id", entryID, "video_id", entry.VideoID)
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	go h.Manager.DownloadEntry(context.Background(), entryID, opts)
+func (h *DownloadHandler) CancelEntryDownload(w http.ResponseWriter, r *http.Request) {
+	entryID, err := strconv.ParseInt(r.PathValue("entryId"), 10, 64)
+	if err != nil || entryID < 1 {
+		writeError(w, http.StatusBadRequest, "invalid entry id")
+		return
+	}
 
-	writeJSON(w, http.StatusAccepted, models.PlaylistEntry{
-		ID:         entry.ID,
-		PlaylistID: entry.PlaylistID,
-		VideoID:    entry.VideoID,
-		Title:      entry.Title.String,
-		Artist:     entry.Artist.String,
-		Duration:   int64(entry.Duration.Int32),
-		Thumbnail:  entry.Thumbnail.String,
-		Status:     models.DownloadStatus(entry.Status.EntryStatus),
-		FilePath:   entry.FilePath.String,
-		Format:     models.AudioFormat(entry.Format.MediaFormat),
-		CreatedAt:  entry.CreatedAt.Time,
-		UpdatedAt:  entry.UpdatedAt.Time,
-	})
+	if err := h.Manager.CancelEntry(entryID); err != nil {
+		writeError(w, http.StatusConflict, "this song is not downloading")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *DownloadHandler) GetPlaylistEvents(w http.ResponseWriter, r *http.Request) {
@@ -119,17 +127,21 @@ func (h *DownloadHandler) GetPlaylistEvents(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	events := h.Manager.Hub.Subscribe(id)
+	defer h.Manager.Hub.Unsubscribe(id, events)
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "retry: %d\n\n", sseRetry.Milliseconds())
 	flusher.Flush()
 
-	events := h.Manager.Hub.Subscribe(id)
-	defer h.Manager.Hub.Unsubscribe(id, events)
-
 	slog.Debug("SSE subscriber connected", "playlist_id", id)
+
+	ping := time.NewTicker(ssePingInterval)
+	defer ping.Stop()
 
 	ctx := r.Context()
 	for {
@@ -137,6 +149,9 @@ func (h *DownloadHandler) GetPlaylistEvents(w http.ResponseWriter, r *http.Reque
 		case <-ctx.Done():
 			slog.Debug("SSE subscriber disconnected", "playlist_id", id)
 			return
+		case <-ping.C:
+			fmt.Fprint(w, ": ping\n\n")
+			flusher.Flush()
 		case ev, ok := <-events:
 			if !ok {
 				return
@@ -172,8 +187,6 @@ func decodeFilterOptions(r *http.Request, req filterOptionsRequest) models.Filte
 	return models.FilterOptions{}
 }
 
-// DownloadEntryFile handles GET /api/playlists/entries/{entryId}/file. It
-// streams the entry's cached audio file to the browser as an attachment.
 func (h *DownloadHandler) DownloadEntryFile(w http.ResponseWriter, r *http.Request) {
 	entryID, err := strconv.ParseInt(r.PathValue("entryId"), 10, 64)
 	if err != nil || entryID < 1 {
@@ -191,17 +204,29 @@ func (h *DownloadHandler) DownloadEntryFile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	filePath := entry.FilePath.String
-	if filePath == "" {
+	if entry.FilePath.String == "" {
 		writeError(w, http.StatusUnprocessableEntity, "entry has no downloaded file")
 		return
 	}
 
-	h.serveAttachment(w, r, filePath, entryFilename(entry))
+	if _, err := os.Stat(entry.FilePath.String); errors.Is(err, fs.ErrNotExist) {
+		h.Manager.MarkFileMissing(entry)
+		writeError(w, http.StatusGone, "file was removed from the server, download it again")
+		return
+	}
+
+	filePath := h.servedFile(r.Context(), entry)
+	file, err := os.Open(filePath)
+	if err != nil {
+		slog.Error("Failed to open file", "file_path", filePath, "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to open file")
+		return
+	}
+	defer file.Close()
+
+	serveAttachment(w, r, file, entryFilename(entry))
 }
 
-// DownloadPlaylistZip handles GET /api/playlists/{id}/download/zip. It streams
-// a zip archive of every completed, on-disk entry file to the browser.
 func (h *DownloadHandler) DownloadPlaylistZip(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id < 1 {
@@ -225,15 +250,34 @@ func (h *DownloadHandler) DownloadPlaylistZip(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var files []string
-	for _, entry := range entries {
+	type zipItem struct {
+		entry db.PlaylistEntry
+		name  string
+	}
+
+	width := max(len(strconv.Itoa(len(entries))), 2)
+	var items []zipItem
+	missing := 0
+	for i, entry := range entries {
 		if entry.Status.EntryStatus != db.EntryStatusCompleted || entry.FilePath.String == "" {
 			continue
 		}
-		files = append(files, entry.FilePath.String)
+		if _, err := os.Stat(entry.FilePath.String); errors.Is(err, fs.ErrNotExist) {
+			h.Manager.MarkFileMissing(entry)
+			missing++
+			continue
+		}
+		items = append(items, zipItem{
+			entry: entry,
+			name:  fmt.Sprintf("%0*d - %s", width, i+1, entryFilename(entry)),
+		})
 	}
 
-	if len(files) == 0 {
+	if len(items) == 0 {
+		if missing > 0 {
+			writeError(w, http.StatusGone, "the downloaded files were removed from the server, download them again")
+			return
+		}
 		writeError(w, http.StatusNotFound, "no downloaded files available for this playlist")
 		return
 	}
@@ -243,15 +287,12 @@ func (h *DownloadHandler) DownloadPlaylistZip(w http.ResponseWriter, r *http.Req
 		zipName = fmt.Sprintf("playlist-%d.zip", id)
 	}
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipName))
+	w.Header().Set("Content-Disposition", contentDisposition(zipName))
 
 	zw := zip.NewWriter(w)
-	for _, entry := range entries {
-		if entry.Status.EntryStatus != db.EntryStatusCompleted || entry.FilePath.String == "" {
-			continue
-		}
-		if err := addFileToZip(zw, entry.FilePath.String, entryFilename(entry)); err != nil {
-			slog.Error("Failed to add file to zip", "entry_id", entry.ID, "error", err)
+	for _, item := range items {
+		if err := addFileToZip(zw, h.servedFile(r.Context(), item.entry), item.name); err != nil {
+			slog.Error("Failed to add file to zip", "entry_id", item.entry.ID, "error", err)
 		}
 	}
 	if err := zw.Close(); err != nil {
@@ -259,30 +300,26 @@ func (h *DownloadHandler) DownloadPlaylistZip(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// serveAttachment streams a single file to the browser as an attachment under a
-// human-readable filename, honoring range requests through http.ServeContent.
-// The on-disk path may use a hash name; filename is the user-facing name.
-func (h *DownloadHandler) serveAttachment(w http.ResponseWriter, r *http.Request, filePath, filename string) {
-	file, err := os.Open(filePath)
+func (h *DownloadHandler) servedFile(ctx context.Context, entry db.PlaylistEntry) string {
+	path, err := h.Manager.TaggedFile(ctx, entry)
 	if err != nil {
-		if os.IsNotExist(err) {
-			writeError(w, http.StatusNotFound, "file no longer exists on server")
-			return
+		if ctx.Err() == nil {
+			slog.Error("Failed to tag file, serving it untagged", "entry_id", entry.ID, "error", err)
 		}
-		slog.Error("Failed to open file", "file_path", filePath, "error", err)
-		writeError(w, http.StatusInternalServerError, "failed to open file")
-		return
+		return entry.FilePath.String
 	}
-	defer file.Close()
+	return path
+}
 
+func serveAttachment(w http.ResponseWriter, r *http.Request, file *os.File, filename string) {
 	info, err := file.Stat()
 	if err != nil {
-		slog.Error("Failed to stat file", "file_path", filePath, "error", err)
+		slog.Error("Failed to stat file", "file_path", file.Name(), "error", err)
 		writeError(w, http.StatusInternalServerError, "failed to stat file")
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Disposition", contentDisposition(filename))
 	if contentType := mime.TypeByExtension(filepath.Ext(filename)); contentType != "" {
 		w.Header().Set("Content-Type", contentType)
 	}
@@ -290,8 +327,27 @@ func (h *DownloadHandler) serveAttachment(w http.ResponseWriter, r *http.Request
 	http.ServeContent(w, r, filename, info.ModTime(), file)
 }
 
-// addFileToZip appends a single file as an entry to the zip writer, using the
-// human-readable name for the archive entry.
+func contentDisposition(filename string) string {
+	encoded := strings.ReplaceAll(url.QueryEscape(filename), "+", "%20")
+	return fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, asciiFilename(filename), encoded)
+}
+
+func asciiFilename(name string) string {
+	ext := filepath.Ext(name)
+	base := strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7e || r == '"' || r == '\\' || r == '%' {
+			return -1
+		}
+		return r
+	}, strings.TrimSuffix(name, ext))
+
+	base = strings.Join(strings.Fields(base), " ")
+	if base == "" {
+		base = "download"
+	}
+	return base + ext
+}
+
 func addFileToZip(zw *zip.Writer, filePath, name string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -309,7 +365,7 @@ func addFileToZip(zw *zip.Writer, filePath, name string) error {
 		return err
 	}
 	header.Name = name
-	header.Method = zip.Deflate
+	header.Method = zip.Store
 
 	entry, err := zw.CreateHeader(header)
 	if err != nil {
@@ -320,9 +376,6 @@ func addFileToZip(zw *zip.Writer, filePath, name string) error {
 	return err
 }
 
-// entryFilename returns the user-facing filename for an entry's audio file: the
-// "author - title" form with the file extension, falling back to the base name
-// when metadata is missing.
 func entryFilename(entry db.PlaylistEntry) string {
 	ext := filepath.Ext(entry.FilePath.String)
 	base := ""
@@ -337,8 +390,6 @@ func entryFilename(entry db.PlaylistEntry) string {
 	return sanitizeFilename(base) + ext
 }
 
-// sanitizeFilename strips characters that are unsafe for HTTP content
-// disposition filenames and trims surrounding whitespace.
 func sanitizeFilename(name string) string {
 	name = strings.Map(func(r rune) rune {
 		switch r {

@@ -4,9 +4,12 @@ import BaseButton from '@/components/atoms/buttons/BaseButton.vue'
 interface CancelButtonProps {
   disabled?: boolean
   loading?: boolean
+  label?: string
 }
 
-defineProps<CancelButtonProps>()
+withDefaults(defineProps<CancelButtonProps>(), {
+  label: 'Cancel',
+})
 
 const emit = defineEmits<{
   click: [event: MouseEvent]
@@ -21,7 +24,7 @@ function onClick(event: MouseEvent) {
   <BaseButton
     color="error"
     variant="soft"
-    label="Cancel"
+    :label="label"
     icon="i-lucide-x"
     size="md"
     :disabled="disabled"

@@ -3,7 +3,7 @@ import PlaylistEditPage from '@/components/pages/PlaylistEditPage.vue'
 
 definePage({
   meta: {
-    title: 'yt-dlp-ui | Edit Metadata',
+    title: 'Edit metadata',
   },
 })
 </script>

@@ -19,19 +19,45 @@ We encourage you to use our Docker setup if you want to deploy the project to yo
 
 ### Docker Setup (Recommended)
 
-We recommend running the project using Docker. A `docker-compose.yaml` file can be found in the root of the repository. Configure the application to your preferences by creating a `.env` file in the root of the repository. A sample configuration can be found in `.env.example`. 
+We recommend running the project using Docker. Docker is the only thing the host needs: the images bring `yt-dlp`, `ffmpeg`, `deno` and the migrations with them.
 
-Run the full stack using:
+The stack expects a [Traefik](https://traefik.io/) instance on the external Docker network `traefik-network`, with an entrypoint `websecure` and a certresolver `letsencrypt`. Adjust the labels in `docker-compose.yaml` if your setup uses other names.
+
+| Service | What it does |
+| --- | --- |
+| `yt-dlp-db` | Postgres 18, on an internal network with no published ports and no internet access. |
+| `yt-dlp-migrate` | An image with `yt-dlp-db/migrations` baked in. Applies pending migrations, then exits. |
+| `yt-dlp-api` | The Go API, with `yt-dlp`, `ffmpeg` and `deno`. Downloads are kept in the `downloads` volume. |
+| `yt-dlp-ui` | nginx. Serves the UI and proxies `/api` to the API. This is the only service Traefik routes to. |
+
+Create the `.env` in the root of the repository and set `DB_USER`, `DB_PASSWORD`, `DB_NAME` and `APP_HOST`. Compose refuses to start without them.
 
 ```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+Every `docker compose up` starts the database, waits until it is healthy, runs `yt-dlp-migrate`, and starts the API only once the migrations succeeded. The UI starts once the API's healthcheck (`GET /api/health`) passes. A fresh volume gets the full schema, an existing one only the new migrations. After a reboot, Docker restarts the database, API and UI but not the migrations. That's fine: new migrations only arrive with a new build, and that build runs `docker compose up` again.
+
+All containers run with `no-new-privileges`. The migrations, API and UI have read-only root filesystems, and the API and migrations drop all capabilities. Logs rotate at 3 × 10 MB per container.
+
+There is no login. Anyone who can reach `APP_HOST` can use the app, so add an auth middleware in Traefik if the host is public.
+
+#### Updating yt-dlp
+
+YouTube changes break `yt-dlp` regularly. The latest release is installed when the API image is built. To pick up a new one, rebuild without the cache:
+
+```bash
+docker compose build --pull --no-cache yt-dlp-api
 docker compose up -d
 ```
 
-If you have your own Postgres DB already, you may want to remove the DB service. Or simply run the API and UI instead.
+Set `YTDLP_VERSION` in `.env` to pin a release instead.
 
-```bash
-docker compose up -d yt-dlp-api yt-dlp-ui
-``` 
+#### Cookies
+
+To use a YouTube account, export its cookies in Netscape format to `./cookies/cookies.txt`, uncomment the `./cookies` volume of `yt-dlp-api` and set `YT_COOKIES_FILE=/data/cookies/cookies.txt`. The file must be writable by uid 1000, because `yt-dlp` writes the cookie jar back. `YT_COOKIES_FROM_BROWSER` does not work inside the container.
 
 ### Database
 

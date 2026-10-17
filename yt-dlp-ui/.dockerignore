@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.eslintcache
+*.tsbuildinfo
+typed-router.d.ts
+auto-imports.d.ts
+components.d.ts
+Dockerfile
+.dockerignore

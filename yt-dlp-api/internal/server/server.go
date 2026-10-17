@@ -42,7 +42,7 @@ func (server *Server) Run() error {
 		Addr:         ":" + server.cfg.ApiPort,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 0, // no write timeout: allows long SSE streams and large file/zip downloads
+		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}
 	slog.Info("Server starting", "port", server.cfg.ApiPort)

@@ -51,7 +51,6 @@ func LoadConfig() (Config, error) {
 
 	dbURL := buildDatabaseURL(dbHost, dbPort, dbUser, dbPassword, dbName)
 
-	// Optional YouTube authentication. Passing logged-in cookies to yt-dlp
 	cookiesFromBrowser := os.Getenv("YT_COOKIES_FROM_BROWSER")
 	cookiesFile := os.Getenv("YT_COOKIES_FILE")
 

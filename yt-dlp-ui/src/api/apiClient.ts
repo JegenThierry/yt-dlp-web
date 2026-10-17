@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { config } from '@/config/config'
 
-// Dedicated axios instance with a shared default setup.
 const axiosInstance = axios.create({
   baseURL: config.apiBaseUrl.replace(/\/$/, ''),
   timeout: 10_000,

@@ -3,7 +3,7 @@ import PlaylistDetailPage from '@/components/pages/PlaylistDetailPage.vue'
 
 definePage({
   meta: {
-    title: 'yt-dlp-ui | Playlist',
+    title: 'Playlist',
   },
 })
 </script>

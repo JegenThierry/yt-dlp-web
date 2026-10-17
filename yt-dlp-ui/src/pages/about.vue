@@ -3,7 +3,7 @@ import AboutPage from '@/components/pages/AboutPage.vue'
 
 definePage({
   meta: {
-    title: 'yt-dlp-ui | About',
+    title: 'About',
   },
 })
 </script>

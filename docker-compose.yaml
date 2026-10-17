@@ -1,38 +1,128 @@
-services:
-  yt-dlp-api:
-    build: ./yt-dlp-api
-    environment:
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      API_PORT: ${API_PORT}
-    ports:
-      - "${API_PORT}:${API_PORT}"
-    depends_on:
-      - yt-dlp-db
+name: yt-dlp-web
 
+x-service: &service
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
   yt-dlp-db:
+    <<: *service
     image: postgres:18-alpine
-    restart: always
+    container_name: yt-dlp-web-db
     shm_size: 128mb
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    ports:
-      - "${DB_PORT}:5432"
+      POSTGRES_USER: ${DB_USER:?set DB_USER in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  yt-dlp-migrate:
+    <<: *service
+    build: ./yt-dlp-db
+    container_name: yt-dlp-web-migrate
+    restart: "no"
+    read_only: true
+    cap_drop:
+      - ALL
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER}:${DB_PASSWORD}@yt-dlp-db:5432/${DB_NAME}?sslmode=disable
+      - up
+    depends_on:
+      yt-dlp-db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  yt-dlp-api:
+    <<: *service
+    build:
+      context: ./yt-dlp-api
+      args:
+        YTDLP_VERSION: ${YTDLP_VERSION:-}
+    container_name: yt-dlp-web-api
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+      - /home/app/.cache
+    environment:
+      API_PORT: "8080"
+      DB_HOST: yt-dlp-db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DOWNLOAD_DIR: /data/downloads
+      YT_COOKIES_FILE: ${YT_COOKIES_FILE:-}
+    volumes:
+      - downloads:/data/downloads
+      - cookies:/data/cookies
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      yt-dlp-migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+      - default
 
   yt-dlp-ui:
+    <<: *service
     build: ./yt-dlp-ui
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
-    ports:
-      - "5173:5173"
-  
+    container_name: yt-dlp-web-ui
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      yt-dlp-api:
+        condition: service_healthy
+    networks:
+      - backend
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.yt-dlp-web.rule=Host(`${APP_HOST:?set APP_HOST in .env}`)"
+      - "traefik.http.routers.yt-dlp-web.entrypoints=websecure"
+      - "traefik.http.routers.yt-dlp-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.yt-dlp-web.loadbalancer.server.port=80"
 
 volumes:
   postgres_data:
+  downloads:
+
+networks:
+  backend:
+    internal: true
+  traefik-network:
+    external: true

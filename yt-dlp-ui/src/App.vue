@@ -4,7 +4,7 @@ import MainLayout from '@/components/layouts/MainLayout.vue'
 </script>
 
 <template>
-  <UApp>
+  <UApp :toaster="{ position: 'top-center' }">
     <MainLayout>
       <RouterView />
     </MainLayout>

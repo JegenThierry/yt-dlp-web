@@ -2,78 +2,76 @@ import axiosInstance from './apiClient'
 import { config } from '@/config/config'
 import type { FilterOptions } from '@/models/filterOptions'
 import type { ProgressEvent } from '@/models/download'
-import type { Playlist } from '@/models/playlist'
 import type { PlaylistEntry } from '@/models/playlistEntry'
 
-export async function downloadAll(playlistId: number, filters?: FilterOptions): Promise<Playlist> {
-  const { data } = await axiosInstance.post<Playlist>(
-    `/playlists/${playlistId}/download`,
-    filters ? { filters } : {},
-  )
-  return data
+export class FileRequestError extends Error {
+  constructor(readonly status: number) {
+    super(`File request failed with status ${status}`)
+    this.name = 'FileRequestError'
+  }
 }
 
-export async function downloadEntry(
-  entryId: number,
-  filters?: FilterOptions,
-): Promise<PlaylistEntry> {
-  const { data } = await axiosInstance.post<PlaylistEntry>(
-    `/playlists/entries/${entryId}/download`,
-    filters ? { filters } : {},
-  )
-  return data
+export async function downloadAll(playlistId: number, filters?: FilterOptions): Promise<void> {
+  await axiosInstance.post(`/playlists/${playlistId}/download`, filters ? { filters } : {})
 }
 
-/**
- * Downloads a single cached entry file to the browser. Returns true on success,
- * false when no file is available for the entry yet.
- */
-export async function downloadEntryFile(entry: PlaylistEntry): Promise<boolean> {
-  if (!entry.file_path) return false
+export async function downloadEntry(entryId: number, filters?: FilterOptions): Promise<void> {
+  await axiosInstance.post(`/playlists/entries/${entryId}/download`, filters ? { filters } : {})
+}
 
-  const dataUrl = axiosInstance.getUri({ url: `/playlists/entries/${entry.id}/file` })
-  const response = await fetch(dataUrl)
+export async function cancelPlaylistDownload(playlistId: number): Promise<void> {
+  await axiosInstance.post(`/playlists/${playlistId}/download/cancel`)
+}
 
-  if (!response.ok) return false
+export async function cancelEntryDownload(entryId: number): Promise<void> {
+  await axiosInstance.post(`/playlists/entries/${entryId}/download/cancel`)
+}
+
+export function playlistZipUrl(playlistId: number): string {
+  return axiosInstance.getUri({ url: `/playlists/${playlistId}/download/zip` })
+}
+
+export function saveFromUrl(url: string) {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = ''
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+export async function saveEntryFile(entry: PlaylistEntry): Promise<void> {
+  const response = await fetch(axiosInstance.getUri({ url: `/playlists/entries/${entry.id}/file` }))
+  if (!response.ok) throw new FileRequestError(response.status)
 
   const blob = await response.blob()
   const filename = filenameFromDisposition(response.headers.get('Content-Disposition'))
   triggerBlobDownload(blob, filename || basenameFromPath(entry.file_path))
-  return true
 }
 
-/**
- * Downloads a zip of every cached file in the playlist to the browser. Returns
- * true on success, false when the playlist has no downloadable files yet.
- */
-export async function downloadPlaylistZip(playlistId: number, fallbackName: string): Promise<boolean> {
-  const dataUrl = axiosInstance.getUri({ url: `/playlists/${playlistId}/download/zip` })
-  const response = await fetch(dataUrl)
-
-  if (!response.ok) return false
-
-  const blob = await response.blob()
-  const filename = filenameFromDisposition(response.headers.get('Content-Disposition'))
-  triggerBlobDownload(blob, filename || fallbackName)
-  return true
-}
-
-/**
- * Parses the filename out of a Content-Disposition header value, or returns
- * empty string when absent.
- */
 function filenameFromDisposition(value: string | null): string {
   if (!value) return ''
-  const match = /filename="?([^";]+)"?/.exec(value)
-  return match?.[1] ?? ''
+
+  const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(value)?.[1]
+  const decoded = encoded ? safeDecode(encoded.trim()) : ''
+  if (decoded) return decoded
+
+  return /filename\s*=\s*"?([^";]+)"?/i.exec(value)?.[1] ?? ''
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return ''
+  }
 }
 
 function basenameFromPath(path: string): string {
   const parts = path.split(/[\\/]/)
-  return parts[parts.length - 1] ?? 'download'
+  return parts[parts.length - 1] || 'download'
 }
 
-/** Triggers a client-side file download for a blob using a temporary anchor. */
 function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -85,30 +83,42 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-/**
- * Subscribes to a playlist's download progress stream via Server-Sent Events.
- * Returns a cleanup function that closes the stream and detaches the listener.
- */
+export interface PlaylistEventHandlers {
+  onEvent: (event: ProgressEvent) => void
+  onOpen?: () => void
+  onClosed?: () => void
+}
+
 export function subscribePlaylistEvents(
   playlistId: number,
-  onMessage: (event: ProgressEvent) => void,
+  handlers: PlaylistEventHandlers,
 ): () => void {
   const source = new EventSource(
     `${config.apiBaseUrl.replace(/\/$/, '')}/playlists/${playlistId}/events`,
   )
 
-  const handler = (event: MessageEvent) => {
+  const handleMessage = (event: MessageEvent) => {
     try {
-      onMessage(JSON.parse(event.data) as ProgressEvent)
+      handlers.onEvent(JSON.parse(event.data) as ProgressEvent)
     } catch (err) {
       console.error('Failed to parse progress event:', err)
     }
   }
 
-  source.addEventListener('message', handler)
+  const handleOpen = () => handlers.onOpen?.()
+
+  const handleError = () => {
+    if (source.readyState === EventSource.CLOSED) handlers.onClosed?.()
+  }
+
+  source.addEventListener('message', handleMessage)
+  source.addEventListener('open', handleOpen)
+  source.addEventListener('error', handleError)
 
   return () => {
-    source.removeEventListener('message', handler)
+    source.removeEventListener('message', handleMessage)
+    source.removeEventListener('open', handleOpen)
+    source.removeEventListener('error', handleError)
     source.close()
   }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { APP_NAME } from '@/utils/title'
 
 const props = defineProps<{
   size?: 'small' | 'medium' | 'large'
@@ -11,5 +12,5 @@ const textClass = computed(() =>
 </script>
 
 <template>
-  <RouterLink to="/" class="no-underline font-bold" :class="textClass"> YT-DL UI </RouterLink>
+  <RouterLink to="/" class="no-underline font-bold" :class="textClass">{{ APP_NAME }}</RouterLink>
 </template>

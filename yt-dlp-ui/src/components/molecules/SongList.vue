@@ -1,174 +1,397 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import UIcon from '@nuxt/ui/components/Icon.vue'
+import { refDebounced } from '@vueuse/core'
+import UButton from '@nuxt/ui/components/Button.vue'
+import UProgress from '@nuxt/ui/components/Progress.vue'
 import { useToast } from '@nuxt/ui/composables'
-import DownloadButton from '@/components/molecules/buttons/DownloadButton.vue'
+import BaseButton from '@/components/atoms/buttons/BaseButton.vue'
+import CancelButton from '@/components/molecules/buttons/CancelButton.vue'
 import PlaylistEntryItem from '@/components/molecules/PlaylistEntryItem.vue'
-import { downloadAll, downloadEntry, downloadEntryFile, downloadPlaylistZip } from '@/api/downloadService'
-import { DownloadStatus } from '@/models/enums'
-import type { FilterOptions } from '@/models/filterOptions'
+import { apiErrorStatus, getApiErrorMessage } from '@/api/apiErrors'
+import {
+  FileRequestError,
+  cancelEntryDownload,
+  cancelPlaylistDownload,
+  downloadAll,
+  downloadEntry,
+  playlistZipUrl,
+  saveEntryFile,
+  saveFromUrl,
+} from '@/api/downloadService'
 import type { Playlist } from '@/models/playlist'
+import type { PlaylistEntry } from '@/models/playlistEntry'
+import type { ButtonColor, ButtonVariant } from '@/types/buttonTypes'
+import type { EntryAction } from '@/types/entryAction'
+import type { EntryProgress } from '@/types/progress'
+import { playlistStats } from '@/utils/playlistStats'
 
 interface SongListProps {
   playlist: Playlist
-  filters?: FilterOptions
-  allComplete?: boolean
+  progress?: Record<number, EntryProgress>
 }
 
 const props = withDefaults(defineProps<SongListProps>(), {
-  allComplete: false,
+  progress: () => ({}),
 })
 
-const emit = defineEmits<{
-  'update:playlist': [playlist: Playlist]
-}>()
+const ACTION_TOAST_DURATION_MS = 10_000
 
 const toast = useToast()
 
-const downloadingAll = ref(false)
-const downloadingEntryIds = ref<number[]>([])
-// When true, we are waiting for downloads to finish before fetching the zip.
-const downloadAllZipPending = ref(false)
+const startingRun = ref(false)
+const cancellingRun = ref(false)
+const busyEntryIds = ref<number[]>([])
 
 const entries = computed(() => props.playlist.entries ?? [])
-const songCount = computed(() => entries.value.length)
+const stats = computed(() => playlistStats(entries.value))
+const zipUrl = computed(() => playlistZipUrl(props.playlist.id))
 
-function isEntryDownloading(entryId: number): boolean {
-  return downloadingEntryIds.value.includes(entryId)
+function songs(count: number): string {
+  return `${count} ${count === 1 ? 'song' : 'songs'}`
 }
 
-function isEntryCompleted(entryId: number): boolean {
-  return entries.value.some(
-    (entry) => entry.id === entryId && entry.status === DownloadStatus.Completed,
+function missedParts(): string[] {
+  const { failed, unavailable } = stats.value
+  return [
+    failed > 0 ? `${failed} failed` : '',
+    unavailable > 0 ? `${unavailable} unavailable` : '',
+  ].filter(Boolean)
+}
+
+const progressSummary = computed(() => {
+  const { completed, total } = stats.value
+  return [`${completed} of ${total} downloaded`, ...missedParts()].join(' · ')
+})
+
+const overallPercent = computed(() => {
+  const { completed, total } = stats.value
+  if (total === 0) return 0
+  const partial = Object.values(props.progress).reduce(
+    (sum, progress) => sum + (progress.percent ?? 0) / 100,
+    0,
   )
+  return Math.min(100, ((completed + partial) / total) * 100)
+})
+
+const liveText = computed(() =>
+  stats.value.active > 0 ? progressSummary.value.split(' · ').join(', ') : '',
+)
+const announcement = refDebounced(liveText, 1000)
+
+interface PrimaryAction {
+  label: string
+  icon: string
+  color: ButtonColor
+  variant: ButtonVariant
+  disabled: boolean
 }
 
-// "Download all": download nothing (already cached) or kick off background
-// downloads, then (once all entries complete) fetch the zip to the browser.
-async function handleDownloadAll() {
-  if (downloadingAll.value) return
-
-  downloadingAll.value = true
-  try {
-    const updated = await downloadAll(props.playlist.id, props.filters)
-    emit('update:playlist', { ...props.playlist, ...updated })
-
-    // If everything is already downloaded (all cached), auto-zip immediately.
-    // Otherwise set a pending flag and let the watcher on allComplete fire.
-    downloadAllZipPending.value = true
-    if (props.allComplete) {
-      await fetchZip()
+const primaryAction = computed<PrimaryAction>(() => {
+  const { completed, failed, unavailable, fresh, remaining } = stats.value
+  if (remaining === 0) {
+    return {
+      label: unavailable > 0 ? 'Nothing left to download' : 'All downloaded',
+      icon: 'i-lucide-circle-check',
+      color: 'neutral',
+      variant: 'soft',
+      disabled: true,
     }
+  }
+  if (fresh === 0) {
+    return {
+      label: `Retry ${failed} failed`,
+      icon: 'i-lucide-rotate-ccw',
+      color: 'warning',
+      variant: 'solid',
+      disabled: false,
+    }
+  }
+  return {
+    label:
+      completed + failed + unavailable === 0 ? 'Download all' : `Download ${remaining} remaining`,
+    icon: 'i-lucide-download',
+    color: 'primary',
+    variant: 'solid',
+    disabled: false,
+  }
+})
+
+const zipCount = computed(() => {
+  const { completed, total } = stats.value
+  return completed < total ? `${completed} of ${total}` : ''
+})
+const zipLabel = computed(() =>
+  zipCount.value ? `Save as zip (${zipCount.value})` : 'Save as zip',
+)
+
+function isConflict(error: unknown): boolean {
+  return apiErrorStatus(error) === 409
+}
+
+async function handleDownloadAll() {
+  if (startingRun.value) return
+
+  startingRun.value = true
+  try {
+    await downloadAll(props.playlist.id)
   } catch (error) {
+    if (isConflict(error)) {
+      toast.add({
+        title: 'Already downloading',
+        description: 'This playlist is already downloading.',
+        color: 'info',
+      })
+      return
+    }
     console.error('Failed to start playlist download:', error)
     toast.add({
       title: 'Download failed',
-      description: 'Something went wrong while starting the playlist download.',
+      description: getApiErrorMessage(error, "Couldn't start the download."),
       color: 'error',
+      duration: 0,
     })
   } finally {
-    downloadingAll.value = false
+    startingRun.value = false
   }
 }
 
-async function handleDownloadEntry(entryId: number) {
-  if (isEntryDownloading(entryId)) return
+let skipNextRunEndToast = false
 
-  // Reuse the per-row button: for an already cached file, save it to the
-  // browser; otherwise trigger the background download.
-  if (isEntryCompleted(entryId)) {
-    await saveEntryFile(entryId)
-    return
-  }
+async function handleCancelAll() {
+  if (cancellingRun.value) return
 
-  // Optimistically flip the status to "downloading" so the row updates
-  // immediately; the SSE stream then brings it to completed/failed.
-  emit('update:playlist', {
-    ...props.playlist,
-    entries: entries.value.map((e) =>
-      e.id === entryId ? { ...e, status: DownloadStatus.Downloading, file_path: '' } : e,
-    ),
-  })
-  downloadingEntryIds.value = [...downloadingEntryIds.value, entryId]
+  cancellingRun.value = true
+  skipNextRunEndToast = true
   try {
-    // The 202 response reflects the pre-download state, so don't merge it back
-    // (it would downgrade the optimistic status). Progress comes via SSE.
-    await downloadEntry(entryId, props.filters)
+    await cancelPlaylistDownload(props.playlist.id)
+    const { completed } = stats.value
+    toast.add({
+      title: completed > 0 ? `Stopped. ${songs(completed)} kept.` : 'Download stopped.',
+      color: 'neutral',
+      icon: 'i-lucide-circle-stop',
+    })
   } catch (error) {
+    skipNextRunEndToast = false
+    if (isConflict(error)) return
+    console.error('Failed to cancel playlist download:', error)
+    toast.add({
+      title: "Couldn't stop the download",
+      description: getApiErrorMessage(error, 'Something went wrong while cancelling. Try again.'),
+      color: 'error',
+      duration: 0,
+    })
+  } finally {
+    cancellingRun.value = false
+  }
+}
+
+function isEntryBusy(entryId: number): boolean {
+  return busyEntryIds.value.includes(entryId)
+}
+
+async function handleEntryAction(entry: PlaylistEntry, action: EntryAction) {
+  if (isEntryBusy(entry.id)) return
+
+  busyEntryIds.value = [...busyEntryIds.value, entry.id]
+  try {
+    if (action === 'save') await saveEntry(entry)
+    else if (action === 'cancel') await cancelEntry(entry)
+    else await startEntry(entry)
+  } finally {
+    busyEntryIds.value = busyEntryIds.value.filter((id) => id !== entry.id)
+  }
+}
+
+async function startEntry(entry: PlaylistEntry) {
+  try {
+    await downloadEntry(entry.id)
+  } catch (error) {
+    if (isConflict(error)) {
+      toast.add({
+        title: 'Already downloading',
+        description: `${entry.title} is already downloading.`,
+        color: 'info',
+      })
+      return
+    }
     console.error('Failed to start entry download:', error)
     toast.add({
       title: 'Download failed',
-      description: 'Something went wrong while starting this song download.',
+      description: getApiErrorMessage(error, "Couldn't start this song download."),
       color: 'error',
+      duration: 0,
     })
-  } finally {
-    downloadingEntryIds.value = downloadingEntryIds.value.filter((id) => id !== entryId)
   }
 }
 
-async function saveEntryFile(entryId: number) {
-  const entry = entries.value.find((e) => e.id === entryId)
-  if (!entry) return
-
-  const ok = await downloadEntryFile(entry)
-  if (!ok) {
+async function cancelEntry(entry: PlaylistEntry) {
+  try {
+    await cancelEntryDownload(entry.id)
+  } catch (error) {
+    if (isConflict(error)) return
+    console.error('Failed to cancel entry download:', error)
     toast.add({
-      title: 'File unavailable',
-      description: 'This file is no longer available on the server. Try downloading again.',
-      color: 'warning',
+      title: "Couldn't cancel",
+      description: getApiErrorMessage(
+        error,
+        `Something went wrong while cancelling ${entry.title}.`,
+      ),
+      color: 'error',
+      duration: 0,
     })
   }
 }
 
-async function fetchZip() {
-  const ok = await downloadPlaylistZip(
-    props.playlist.id,
-    `${props.playlist.title || 'playlist'}.zip`,
-  )
-  downloadAllZipPending.value = false
-  if (!ok) {
-    toast.add({
-      title: 'No files to zip',
-      description: 'There are no downloaded files available to bundle yet.',
-      color: 'warning',
-    })
-  }
-}
-
-// When all downloads complete after a "Download all" click, fetch the zip.
-watch(
-  () => props.allComplete,
-  async (complete) => {
-    if (complete && downloadAllZipPending.value) {
-      await fetchZip()
+async function saveEntry(entry: PlaylistEntry) {
+  try {
+    await saveEntryFile(entry)
+  } catch (error) {
+    if (error instanceof FileRequestError && (error.status === 404 || error.status === 410)) {
+      toast.add({
+        title: 'File unavailable',
+        description: `${entry.title} was removed from the server.`,
+        color: 'warning',
+        duration: ACTION_TOAST_DURATION_MS,
+        actions: [
+          {
+            label: 'Download again',
+            icon: 'i-lucide-download',
+            color: 'neutral',
+            variant: 'outline',
+            onClick: () => handleEntryAction(entry, 'download'),
+          },
+        ],
+      })
+      return
     }
+    console.error('Failed to save entry file:', error)
+    toast.add({
+      title: "Couldn't save the file",
+      description:
+        error instanceof FileRequestError
+          ? 'The server could not send this file. Try again.'
+          : 'Check your connection and try again.',
+      color: 'error',
+      duration: 0,
+    })
+  }
+}
+
+let runPeak = 0
+
+watch(
+  () => stats.value.active,
+  (active, previous) => {
+    if (active > 0) {
+      runPeak = Math.max(runPeak, active)
+      return
+    }
+    if (!previous) return
+
+    const peak = runPeak
+    runPeak = 0
+    if (skipNextRunEndToast) {
+      skipNextRunEndToast = false
+      return
+    }
+    if (peak > 1) announceRunEnd()
   },
+  { immediate: true },
 )
+
+function announceRunEnd() {
+  const { completed, failed, unavailable } = stats.value
+  if (completed === 0) {
+    toast.add({
+      title: 'Download failed',
+      description: `${songs(failed + unavailable)} couldn't be downloaded.`,
+      color: 'error',
+      duration: 0,
+    })
+    return
+  }
+
+  const missed = missedParts()
+  toast.add({
+    title: [`${songs(completed)} ready`, ...missed].join(' · '),
+    color: missed.length > 0 ? 'warning' : 'success',
+    duration: ACTION_TOAST_DURATION_MS,
+    actions: [
+      {
+        label: 'Save as zip',
+        icon: 'i-lucide-folder-archive',
+        color: 'neutral',
+        variant: 'outline',
+        onClick: () => saveFromUrl(zipUrl.value),
+      },
+    ],
+  })
+}
 </script>
 
 <template>
   <div>
-    <div v-if="songCount > 0" class="flex items-center justify-end px-4 py-3 sm:px-6">
-      <DownloadButton
-        label="Download all"
-        :loading="downloadingAll || downloadAllZipPending"
-        @click="handleDownloadAll"
+    <div class="bg-default/90 sticky top-0 z-10 border-b border-default backdrop-blur">
+      <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+        <div class="flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <h2 class="text-highlighted font-semibold">Songs</h2>
+          <p v-if="stats.total > 0" class="text-muted text-sm tabular-nums">
+            {{ progressSummary }}
+          </p>
+        </div>
+
+        <div v-if="stats.total > 0" class="flex flex-wrap items-center gap-2">
+          <UButton
+            v-if="stats.completed > 0"
+            :to="zipUrl"
+            external
+            download
+            icon="i-lucide-folder-archive"
+            color="neutral"
+            variant="outline"
+            :aria-label="zipLabel"
+          >
+            Save as zip
+            <span v-if="zipCount" class="hidden sm:inline">({{ zipCount }})</span>
+          </UButton>
+          <CancelButton
+            v-if="stats.active > 0"
+            :label="`Cancel (${stats.active} left)`"
+            :loading="cancellingRun"
+            @click="handleCancelAll"
+          />
+          <BaseButton
+            v-else
+            :label="primaryAction.label"
+            :icon="primaryAction.icon"
+            :color="primaryAction.color"
+            :variant="primaryAction.variant"
+            :disabled="primaryAction.disabled"
+            :loading="startingRun"
+            @click="handleDownloadAll"
+          />
+        </div>
+      </div>
+
+      <UProgress
+        v-if="stats.active > 0"
+        :model-value="overallPercent"
+        size="xs"
+        :aria-label="progressSummary"
+        class="absolute inset-x-0 bottom-0 translate-y-1/2"
       />
+      <p class="sr-only" role="status" aria-live="polite">{{ announcement }}</p>
     </div>
 
-    <ul v-if="songCount > 0" class="divide-y divide-default overflow-y-auto max-h-[60vh]">
+    <ul class="divide-y divide-default">
       <PlaylistEntryItem
         v-for="entry in entries"
         :key="entry.id"
         :entry="entry"
-        :downloading="isEntryDownloading(entry.id)"
-        :on-download="() => handleDownloadEntry(entry.id)"
+        :progress="progress[entry.id]"
+        :busy="isEntryBusy(entry.id)"
+        @action="(action) => handleEntryAction(entry, action)"
       />
     </ul>
-
-    <div v-else class="flex flex-col items-center gap-2 py-8 text-center">
-      <UIcon name="i-lucide-music" class="text-dimmed size-8" />
-      <p class="text-muted text-sm">No songs were found for this playlist.</p>
-    </div>
   </div>
 </template>

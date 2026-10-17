@@ -11,6 +11,96 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AudioQuality string
+
+const (
+	AudioQualityBest     AudioQuality = "best"
+	AudioQualityHigh     AudioQuality = "high"
+	AudioQualityStandard AudioQuality = "standard"
+	AudioQualityLow      AudioQuality = "low"
+)
+
+func (e *AudioQuality) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AudioQuality(s)
+	case string:
+		*e = AudioQuality(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AudioQuality: %T", src)
+	}
+	return nil
+}
+
+type NullAudioQuality struct {
+	AudioQuality AudioQuality
+	Valid        bool // Valid is true if AudioQuality is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAudioQuality) Scan(value interface{}) error {
+	if value == nil {
+		ns.AudioQuality, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AudioQuality.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAudioQuality) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AudioQuality), nil
+}
+
+type EntryErrorCode string
+
+const (
+	EntryErrorCodeUnavailable    EntryErrorCode = "unavailable"
+	EntryErrorCodeSignInRequired EntryErrorCode = "sign_in_required"
+	EntryErrorCodeBlocked        EntryErrorCode = "blocked"
+	EntryErrorCodeNetwork        EntryErrorCode = "network"
+	EntryErrorCodePostprocessing EntryErrorCode = "postprocessing"
+	EntryErrorCodeUnknown        EntryErrorCode = "unknown"
+)
+
+func (e *EntryErrorCode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EntryErrorCode(s)
+	case string:
+		*e = EntryErrorCode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EntryErrorCode: %T", src)
+	}
+	return nil
+}
+
+type NullEntryErrorCode struct {
+	EntryErrorCode EntryErrorCode
+	Valid          bool // Valid is true if EntryErrorCode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEntryErrorCode) Scan(value interface{}) error {
+	if value == nil {
+		ns.EntryErrorCode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EntryErrorCode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEntryErrorCode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EntryErrorCode), nil
+}
+
 type EntryStatus string
 
 const (
@@ -110,21 +200,27 @@ type Playlist struct {
 	Title     pgtype.Text
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
+	Quality   AudioQuality
+	SourceID  pgtype.Text
 }
 
 type PlaylistEntry struct {
-	ID         int64
-	PlaylistID int64
-	VideoID    string
-	Title      pgtype.Text
-	Artist     pgtype.Text
-	Duration   pgtype.Int4
-	Thumbnail  pgtype.Text
-	Status     NullEntryStatus
-	FilePath   pgtype.Text
-	Format     NullMediaFormat
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-	Genre      pgtype.Text
-	Year       pgtype.Int4
+	ID           int64
+	PlaylistID   int64
+	VideoID      string
+	Title        pgtype.Text
+	Artist       pgtype.Text
+	Duration     pgtype.Int4
+	Thumbnail    pgtype.Text
+	Status       NullEntryStatus
+	FilePath     pgtype.Text
+	Format       NullMediaFormat
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	Genre        pgtype.Text
+	Year         pgtype.Int4
+	ErrorMessage pgtype.Text
+	ErrorCode    NullEntryErrorCode
+	SourceTitle  pgtype.Text
+	SourceArtist pgtype.Text
 }

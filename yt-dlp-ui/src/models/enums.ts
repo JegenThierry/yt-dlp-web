@@ -23,3 +23,17 @@ export enum AudioQuality {
   Standard = 'standard',
   Low = 'low',
 }
+
+export enum DownloadPhase {
+  Downloading = 'downloading',
+  Converting = 'converting',
+}
+
+export enum EntryErrorCode {
+  Unavailable = 'unavailable',
+  SignInRequired = 'sign_in_required',
+  Blocked = 'blocked',
+  Network = 'network',
+  Postprocessing = 'postprocessing',
+  Unknown = 'unknown',
+}

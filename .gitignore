@@ -49,7 +49,7 @@ CLAUDE.md
 opencode.jsonc
 
 # Downloads
-**/downloads/
+yt-dlp-api/downloads/
 /downloads/*
 /.downloads/*
 .claude/*

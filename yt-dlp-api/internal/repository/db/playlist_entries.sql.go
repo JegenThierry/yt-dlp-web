@@ -11,10 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createPlaylistEntry = `-- name: CreatePlaylistEntry :one
-INSERT INTO playlist_entries (playlist_id, video_id, title, artist, genre, year, duration, thumbnail, status, file_path, format, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year
+const createPlaylistEntry = `-- name: CreatePlaylistEntry :execrows
+INSERT INTO playlist_entries (playlist_id, video_id, title, artist, genre, year, duration, thumbnail, status, file_path, format, source_title, source_artist, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $3, $4, NOW(), NOW())
+ON CONFLICT (playlist_id, video_id) DO NOTHING
 `
 
 type CreatePlaylistEntryParams struct {
@@ -31,8 +31,8 @@ type CreatePlaylistEntryParams struct {
 	Format     NullMediaFormat
 }
 
-func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEntryParams) (PlaylistEntry, error) {
-	row := q.db.QueryRow(ctx, createPlaylistEntry,
+func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEntryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createPlaylistEntry,
 		arg.PlaylistID,
 		arg.VideoID,
 		arg.Title,
@@ -45,28 +45,14 @@ func (q *Queries) CreatePlaylistEntry(ctx context.Context, arg CreatePlaylistEnt
 		arg.FilePath,
 		arg.Format,
 	)
-	var i PlaylistEntry
-	err := row.Scan(
-		&i.ID,
-		&i.PlaylistID,
-		&i.VideoID,
-		&i.Title,
-		&i.Artist,
-		&i.Duration,
-		&i.Thumbnail,
-		&i.Status,
-		&i.FilePath,
-		&i.Format,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Genre,
-		&i.Year,
-	)
-	return i, err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const fetchPlaylistEntries = `-- name: FetchPlaylistEntries :many
-SELECT id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year FROM playlist_entries WHERE playlist_id = $1 ORDER BY id
+SELECT id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year, error_message, error_code, source_title, source_artist FROM playlist_entries WHERE playlist_id = $1 ORDER BY id
 `
 
 func (q *Queries) FetchPlaylistEntries(ctx context.Context, playlistID int64) ([]PlaylistEntry, error) {
@@ -93,6 +79,10 @@ func (q *Queries) FetchPlaylistEntries(ctx context.Context, playlistID int64) ([
 			&i.UpdatedAt,
 			&i.Genre,
 			&i.Year,
+			&i.ErrorMessage,
+			&i.ErrorCode,
+			&i.SourceTitle,
+			&i.SourceArtist,
 		); err != nil {
 			return nil, err
 		}
@@ -105,7 +95,7 @@ func (q *Queries) FetchPlaylistEntries(ctx context.Context, playlistID int64) ([
 }
 
 const fetchPlaylistEntryByID = `-- name: FetchPlaylistEntryByID :one
-SELECT id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year FROM playlist_entries WHERE id = $1
+SELECT id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year, error_message, error_code, source_title, source_artist FROM playlist_entries WHERE id = $1
 `
 
 func (q *Queries) FetchPlaylistEntryByID(ctx context.Context, id int64) (PlaylistEntry, error) {
@@ -126,28 +116,78 @@ func (q *Queries) FetchPlaylistEntryByID(ctx context.Context, id int64) (Playlis
 		&i.UpdatedAt,
 		&i.Genre,
 		&i.Year,
+		&i.ErrorMessage,
+		&i.ErrorCode,
+		&i.SourceTitle,
+		&i.SourceArtist,
 	)
 	return i, err
 }
 
+const fetchPlaylistFormat = `-- name: FetchPlaylistFormat :one
+SELECT format FROM playlist_entries
+WHERE playlist_id = $1 AND format IS NOT NULL
+ORDER BY id
+LIMIT 1
+`
+
+func (q *Queries) FetchPlaylistFormat(ctx context.Context, playlistID int64) (NullMediaFormat, error) {
+	row := q.db.QueryRow(ctx, fetchPlaylistFormat, playlistID)
+	var format NullMediaFormat
+	err := row.Scan(&format)
+	return format, err
+}
+
+const resetInterruptedEntries = `-- name: ResetInterruptedEntries :execrows
+UPDATE playlist_entries
+SET status = 'new', file_path = NULL, error_message = NULL, error_code = NULL, updated_at = NOW()
+WHERE status IN ('downloading', 'pending')
+`
+
+func (q *Queries) ResetInterruptedEntries(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, resetInterruptedEntries)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setPlaylistEntriesStatus = `-- name: SetPlaylistEntriesStatus :exec
+UPDATE playlist_entries
+SET status = $1, file_path = NULL, error_message = NULL, error_code = NULL, updated_at = NOW()
+WHERE id = ANY($2::bigint[])
+`
+
+type SetPlaylistEntriesStatusParams struct {
+	Status NullEntryStatus
+	Ids    []int64
+}
+
+func (q *Queries) SetPlaylistEntriesStatus(ctx context.Context, arg SetPlaylistEntriesStatusParams) error {
+	_, err := q.db.Exec(ctx, setPlaylistEntriesStatus, arg.Status, arg.Ids)
+	return err
+}
+
 const updatePlaylistEntryMetadata = `-- name: UpdatePlaylistEntryMetadata :one
 UPDATE playlist_entries
-SET title = $2, artist = $3, genre = $4, year = $5, updated_at = NOW()
-WHERE id = $1
-RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year
+SET title = $3, artist = $4, genre = $5, year = $6, updated_at = NOW()
+WHERE id = $1 AND playlist_id = $2
+RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year, error_message, error_code, source_title, source_artist
 `
 
 type UpdatePlaylistEntryMetadataParams struct {
-	ID     int64
-	Title  pgtype.Text
-	Artist pgtype.Text
-	Genre  pgtype.Text
-	Year   pgtype.Int4
+	ID         int64
+	PlaylistID int64
+	Title      pgtype.Text
+	Artist     pgtype.Text
+	Genre      pgtype.Text
+	Year       pgtype.Int4
 }
 
 func (q *Queries) UpdatePlaylistEntryMetadata(ctx context.Context, arg UpdatePlaylistEntryMetadataParams) (PlaylistEntry, error) {
 	row := q.db.QueryRow(ctx, updatePlaylistEntryMetadata,
 		arg.ID,
+		arg.PlaylistID,
 		arg.Title,
 		arg.Artist,
 		arg.Genre,
@@ -169,25 +209,37 @@ func (q *Queries) UpdatePlaylistEntryMetadata(ctx context.Context, arg UpdatePla
 		&i.UpdatedAt,
 		&i.Genre,
 		&i.Year,
+		&i.ErrorMessage,
+		&i.ErrorCode,
+		&i.SourceTitle,
+		&i.SourceArtist,
 	)
 	return i, err
 }
 
 const updatePlaylistEntryStatus = `-- name: UpdatePlaylistEntryStatus :one
 UPDATE playlist_entries
-SET status = $2, file_path = $3, updated_at = NOW()
+SET status = $2, file_path = $3, error_message = $4, error_code = $5, updated_at = NOW()
 WHERE id = $1
-RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year
+RETURNING id, playlist_id, video_id, title, artist, duration, thumbnail, status, file_path, format, created_at, updated_at, genre, year, error_message, error_code, source_title, source_artist
 `
 
 type UpdatePlaylistEntryStatusParams struct {
-	ID       int64
-	Status   NullEntryStatus
-	FilePath pgtype.Text
+	ID           int64
+	Status       NullEntryStatus
+	FilePath     pgtype.Text
+	ErrorMessage pgtype.Text
+	ErrorCode    NullEntryErrorCode
 }
 
 func (q *Queries) UpdatePlaylistEntryStatus(ctx context.Context, arg UpdatePlaylistEntryStatusParams) (PlaylistEntry, error) {
-	row := q.db.QueryRow(ctx, updatePlaylistEntryStatus, arg.ID, arg.Status, arg.FilePath)
+	row := q.db.QueryRow(ctx, updatePlaylistEntryStatus,
+		arg.ID,
+		arg.Status,
+		arg.FilePath,
+		arg.ErrorMessage,
+		arg.ErrorCode,
+	)
 	var i PlaylistEntry
 	err := row.Scan(
 		&i.ID,
@@ -204,6 +256,10 @@ func (q *Queries) UpdatePlaylistEntryStatus(ctx context.Context, arg UpdatePlayl
 		&i.UpdatedAt,
 		&i.Genre,
 		&i.Year,
+		&i.ErrorMessage,
+		&i.ErrorCode,
+		&i.SourceTitle,
+		&i.SourceArtist,
 	)
 	return i, err
 }

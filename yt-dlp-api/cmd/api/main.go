@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"log"
 	"log/slog"
 	"os"
@@ -20,7 +22,7 @@ func main() {
 
 func run() error {
 	err := godotenv.Load()
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		slog.Error("Error loading .env file", "error", err)
 		return err
 	}
@@ -39,5 +41,12 @@ func run() error {
 	defer db.Close()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	return server.NewServer(cfg, db, logger).Run()
+	srv := server.NewServer(cfg, db, logger)
+
+	if err := srv.DownloadManager.ResetInterrupted(context.Background()); err != nil {
+		slog.Error("Error resetting interrupted downloads", "error", err)
+		return err
+	}
+
+	return srv.Run()
 }

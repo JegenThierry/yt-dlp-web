@@ -11,6 +11,7 @@ interface BaseButtonProps {
   variant?: ButtonVariant
   loading?: boolean
   ariaLabel?: string
+  ariaExpanded?: boolean
   type?: ButtonType
 }
 
@@ -18,6 +19,7 @@ withDefaults(defineProps<BaseButtonProps>(), {
   color: 'primary',
   size: 'md',
   variant: 'solid',
+  ariaExpanded: undefined,
   type: 'button',
 })
 
@@ -40,6 +42,7 @@ function onClick(event: MouseEvent) {
     :disabled="disabled"
     :icon="icon"
     :aria-label="ariaLabel"
+    :aria-expanded="ariaExpanded"
     :type="type"
     @click="onClick"
   >
