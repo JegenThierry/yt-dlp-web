@@ -2,7 +2,7 @@
 
 This project provides a web interface for the command-line tool: `yt-dlp`.
 
-Please refer to the original [yt-dlp](https://github.com/yt-dlp/yt-dlp) repository for more information.
+Please refer to the original [yt-dlp](https://github.com/yt-dlp/yt-dlp) repository for more information. **NOTE:** Be careful about providing your own cookies.txt file as it may lead to your account being blocked.
 
 ![The "Add a playlist" page, with a recently added playlist below the form](assets/screenshot.png)
 
