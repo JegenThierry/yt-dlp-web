@@ -98,7 +98,7 @@ const footerItems: NavigationMenuItem[] = [{ label: 'About', icon: 'i-lucide-inf
         />
       </div>
 
-      <main id="main-content" tabindex="-1" class="flex-1 overflow-y-auto outline-none">
+      <main id="main-content" tabindex="-1" class="relative flex-1 overflow-y-auto outline-none">
         <div class="py-4 sm:p-4">
           <slot />
         </div>
